@@ -12,7 +12,19 @@ import {
   Loader2,
   RefreshCw,
   XCircle,
+  Trash2,
 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
 import { CATEGORY_LABELS } from "../lib/categoryLabels";
 
@@ -94,6 +106,22 @@ export default function CrawlerManager() {
 
   // Detect if there are stuck running jobs in DB but no actual running process
   const hasStuckJobs = !isCrawling && jobs?.some((j) => j.status === "running");
+
+  const deleteJob = trpc.crawl.deleteJob.useMutation({
+    onSuccess: () => {
+      toast.success("任務已刪除");
+      refetchJobs();
+    },
+    onError: () => toast.error("刪除失敗"),
+  });
+
+  const deleteAllJobs = trpc.crawl.deleteAllJobs.useMutation({
+    onSuccess: () => {
+      toast.success("所有歷史記錄已清除");
+      refetchJobs();
+    },
+    onError: () => toast.error("清除失敗"),
+  });
 
   const stopCrawl = trpc.crawl.stop.useMutation({
     onSuccess: (data) => {
@@ -299,10 +327,44 @@ export default function CrawlerManager() {
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
             <CardTitle className="text-base font-semibold">爬蟲任務歷史</CardTitle>
-            <Button variant="ghost" size="sm" onClick={() => refetchJobs()} className="gap-2 text-xs">
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="ghost" size="sm" onClick={() => refetchJobs()} className="gap-2 text-xs">
+                <RefreshCw className="h-3.5 w-3.5" />
+                刷新
+              </Button>
+              {jobs && jobs.length > 0 && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="gap-2 text-xs text-red-400 hover:text-red-300 hover:bg-red-500/10"
+                      disabled={isCrawling}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      清除全部
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent className="bg-card border-border">
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>確認清除所有歷史？</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        這將刪除所有非執行中的任務歷史記錄，此操作無法復原。
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>取消</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-red-600 hover:bg-red-700"
+                        onClick={() => deleteAllJobs.mutate()}
+                      >
+                        確認清除
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
+            </div>
           </div>
         </CardHeader>
         <CardContent className="p-0">
@@ -326,6 +388,7 @@ export default function CrawlerManager() {
                     <th className="text-right px-4 py-3 text-muted-foreground font-medium">爬取/失敗</th>
                     <th className="text-right px-4 py-3 text-muted-foreground font-medium">開始時間</th>
                     <th className="text-right px-4 py-3 text-muted-foreground font-medium">完成時間</th>
+                    <th className="px-4 py-3"></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -364,6 +427,19 @@ export default function CrawlerManager() {
                       </td>
                       <td className="px-4 py-3 text-right text-xs text-muted-foreground">
                         {job.completedAt ? formatDate(job.completedAt) : "-"}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {job.status !== "running" && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-red-400 hover:bg-red-500/10"
+                            onClick={() => deleteJob.mutate({ id: job.id })}
+                            disabled={deleteJob.isPending}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
                       </td>
                     </tr>
                   ))}

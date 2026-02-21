@@ -11,6 +11,8 @@ import ProductDetail from "./pages/ProductDetail";
 import CrawlerManager from "./pages/CrawlerManager";
 import Notifications from "./pages/Notifications";
 import SettingsPage from "./pages/Settings";
+import ExportPage from "./pages/Export";
+import CrawlTargets from "./pages/CrawlTargets";
 import DashboardLayout from "./components/DashboardLayout";
 import PasswordGate from "./pages/PasswordGate";
 
@@ -30,6 +32,8 @@ function ProtectedRouter() {
         <Route path="/crawler" component={CrawlerManager} />
         <Route path="/notifications" component={Notifications} />
         <Route path="/settings" component={SettingsPage} />
+        <Route path="/export" component={ExportPage} />
+        <Route path="/targets" component={CrawlTargets} />
         <Route path="/404" component={NotFound} />
         <Route component={NotFound} />
       </Switch>

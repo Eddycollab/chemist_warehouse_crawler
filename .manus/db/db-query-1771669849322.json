@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `crawl_targets` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`name` varchar(200) NOT NULL,\n\t`baseUrl` text NOT NULL,\n\t`productListSelector` text NOT NULL,\n\t`productNameSelector` text NOT NULL,\n\t`productPriceSelector` text NOT NULL,\n\t`productOriginalPriceSelector` text,\n\t`productLinkSelector` text NOT NULL,\n\t`productImageSelector` text,\n\t`paginationParam` varchar(50) NOT NULL DEFAULT 'page',\n\t`maxPages` int NOT NULL DEFAULT 10,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`notes` text,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `crawl_targets_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute CREATE TABLE `crawl_targets` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`name` varchar(200) NOT NULL,\n\t`baseUrl` text NOT NULL,\n\t`productListSelector` text NOT NULL,\n\t`productNameSelector` text NOT NULL,\n\t`productPriceSelector` text NOT NULL,\n\t`productOriginalPriceSelector` text,\n\t`productLinkSelector` text NOT NULL,\n\t`productImageSelector` text,\n\t`paginationParam` varchar(50) NOT NULL DEFAULT 'page',\n\t`maxPages` int NOT NULL DEFAULT 10,\n\t`isActive` boolean NOT NULL DEFAULT true,\n\t`notes` text,\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `crawl_targets_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3499
+}

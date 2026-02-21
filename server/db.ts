@@ -1,4 +1,4 @@
-import { eq, desc, and, gte, lte, like, or, sql, inArray } from "drizzle-orm";
+import { eq, desc, and, gte, lte, like, or, sql, inArray, ne } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import mysql from "mysql2/promise";
 import {
@@ -9,10 +9,12 @@ import {
   crawlJobs,
   notifications,
   crawlerSettings,
+  crawlTargets,
   InsertProduct,
   InsertPriceHistory,
   InsertCrawlJob,
   InsertNotification,
+  InsertCrawlTarget,
   ProductCategory,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
@@ -325,6 +327,48 @@ export async function getLatestCrawlJob() {
   return result.length > 0 ? result[0] : null;
 }
 
+export async function deleteCrawlJob(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(crawlJobs).where(eq(crawlJobs.id, id));
+}
+
+export async function deleteAllCrawlJobs() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Only delete non-running jobs to avoid deleting active jobs
+  return db.delete(crawlJobs).where(
+    and(
+      sql`${crawlJobs.status} != 'running'`
+    )
+  );
+}
+
+export async function getAllProductsForExport() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(products).orderBy(desc(products.updatedAt));
+}
+
+export async function getPriceHistoryForExport(productIds?: number[], days = 90) {
+  const db = await getDb();
+  if (!db) return [];
+
+  const since = new Date();
+  since.setDate(since.getDate() - days);
+
+  const conditions = [gte(priceHistory.crawledAt, since)];
+  if (productIds && productIds.length > 0) {
+    conditions.push(inArray(priceHistory.productId, productIds));
+  }
+
+  return db
+    .select()
+    .from(priceHistory)
+    .where(and(...conditions))
+    .orderBy(desc(priceHistory.crawledAt));
+}
+
 // ─── Notification Helpers ─────────────────────────────────────────────────────
 
 export async function createNotification(data: InsertNotification) {
@@ -398,3 +442,37 @@ export async function getAccessPassword(): Promise<string> {
     .limit(1);
   return result[0]?.value ?? "CW150721";
 }
+
+// ─── Crawl Targets Helpers ────────────────────────────────────────────────────
+export async function getCrawlTargets() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(crawlTargets).orderBy(desc(crawlTargets.createdAt));
+}
+
+export async function getCrawlTargetById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const result = await db.select().from(crawlTargets).where(eq(crawlTargets.id, id)).limit(1);
+  return result[0] ?? null;
+}
+
+export async function createCrawlTarget(data: InsertCrawlTarget) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(crawlTargets).values(data);
+  return result;
+}
+
+export async function updateCrawlTarget(id: number, data: Partial<InsertCrawlTarget>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(crawlTargets).set(data).where(eq(crawlTargets.id, id));
+}
+
+export async function deleteCrawlTarget(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(crawlTargets).where(eq(crawlTargets.id, id));
+}
+

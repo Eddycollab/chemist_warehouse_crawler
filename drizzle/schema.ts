@@ -146,3 +146,27 @@ export const crawlerSettings = mysqlTable("crawler_settings", {
 });
 
 export type CrawlerSettings = typeof crawlerSettings.$inferSelect;
+
+/**
+ * Crawl targets table - user-defined websites to crawl
+ */
+export const crawlTargets = mysqlTable("crawl_targets", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  baseUrl: text("baseUrl").notNull(),
+  productListSelector: text("productListSelector").notNull(),
+  productNameSelector: text("productNameSelector").notNull(),
+  productPriceSelector: text("productPriceSelector").notNull(),
+  productOriginalPriceSelector: text("productOriginalPriceSelector"),
+  productLinkSelector: text("productLinkSelector").notNull(),
+  productImageSelector: text("productImageSelector"),
+  paginationParam: varchar("paginationParam", { length: 50 }).default("page").notNull(),
+  maxPages: int("maxPages").default(10).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  notes: text("notes"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type CrawlTarget = typeof crawlTargets.$inferSelect;
+export type InsertCrawlTarget = typeof crawlTargets.$inferInsert;

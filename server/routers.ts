@@ -13,6 +13,10 @@ import {
   getPriceHistory,
   getCrawlJobs,
   getLatestCrawlJob,
+  deleteCrawlJob,
+  deleteAllCrawlJobs,
+  getAllProductsForExport,
+  getPriceHistoryForExport,
   getNotifications,
   markNotificationRead,
   markAllNotificationsRead,
@@ -21,6 +25,11 @@ import {
   updateCrawlerSetting,
   getAccessPassword,
   resetStuckJobs,
+  getCrawlTargets,
+  getCrawlTargetById,
+  createCrawlTarget,
+  updateCrawlTarget,
+  deleteCrawlTarget,
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
 import * as XLSX from "xlsx";
@@ -312,6 +321,18 @@ const crawlRouter = router({
     const count = await resetStuckJobs();
     return { success: true, message: count > 0 ? `已重置 ${count} 個卡住的任務` : "沒有需要重置的任務", count };
   }),
+
+  deleteJob: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteCrawlJob(input.id);
+      return { success: true };
+    }),
+
+  deleteAllJobs: publicProcedure.mutation(async () => {
+    await deleteAllCrawlJobs();
+    return { success: true };
+  }),
 });
 
 // ─── Notification Router ──────────────────────────────────────────────────────
@@ -366,6 +387,36 @@ const settingsRouter = router({
     }),
 });
 
+// ─── Export Router ──────────────────────────────────────────────────────────
+
+const exportRouter = router({
+  products: publicProcedure
+    .input(
+      z.object({
+        category: z.enum(PRODUCT_CATEGORIES).optional(),
+        isOnSale: z.boolean().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const allProducts = await getAllProductsForExport();
+      let filtered = allProducts;
+      if (input?.category) filtered = filtered.filter((p) => p.category === input.category);
+      if (input?.isOnSale !== undefined) filtered = filtered.filter((p) => p.isOnSale === input.isOnSale);
+      return filtered;
+    }),
+
+  priceHistory: publicProcedure
+    .input(
+      z.object({
+        productIds: z.array(z.number()).optional(),
+        days: z.number().min(1).max(365).default(90),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      return getPriceHistoryForExport(input?.productIds, input?.days ?? 90);
+    }),
+});
+
 // ─── Access Auth Router ─────────────────────────────────────────────────────
 const accessAuthRouter = router({
   verify: publicProcedure
@@ -384,6 +435,74 @@ const accessAuthRouter = router({
 });
 
 // ─── App Router ───────────────────────────────────────────────────────────────
+// ─── Crawl Targets Router ─────────────────────────────────────────────────────
+const targetsRouter = router({
+  list: publicProcedure.query(async () => {
+    return getCrawlTargets();
+  }),
+  getById: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .query(async ({ input }) => {
+      return getCrawlTargetById(input.id);
+    }),
+  create: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1).max(200),
+        baseUrl: z.string().url(),
+        productListSelector: z.string().min(1),
+        productNameSelector: z.string().min(1),
+        productPriceSelector: z.string().min(1),
+        productOriginalPriceSelector: z.string().optional(),
+        productLinkSelector: z.string().min(1),
+        productImageSelector: z.string().optional(),
+        paginationParam: z.string().default("page"),
+        maxPages: z.number().min(1).max(100).default(10),
+        isActive: z.boolean().default(true),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await createCrawlTarget(input);
+      return { success: true };
+    }),
+  update: publicProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        name: z.string().min(1).max(200).optional(),
+        baseUrl: z.string().url().optional(),
+        productListSelector: z.string().min(1).optional(),
+        productNameSelector: z.string().min(1).optional(),
+        productPriceSelector: z.string().min(1).optional(),
+        productOriginalPriceSelector: z.string().optional(),
+        productLinkSelector: z.string().min(1).optional(),
+        productImageSelector: z.string().optional(),
+        paginationParam: z.string().optional(),
+        maxPages: z.number().min(1).max(100).optional(),
+        isActive: z.boolean().optional(),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      await updateCrawlTarget(id, data);
+      return { success: true };
+    }),
+  delete: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteCrawlTarget(input.id);
+      return { success: true };
+    }),
+  toggleActive: publicProcedure
+    .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .mutation(async ({ input }) => {
+      await updateCrawlTarget(input.id, { isActive: input.isActive });
+      return { success: true };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -400,6 +519,8 @@ export const appRouter = router({
   crawl: crawlRouter,
   notification: notificationRouter,
   settings: settingsRouter,
+  export: exportRouter,
+  targets: targetsRouter,
 });
 
 export type AppRouter = typeof appRouter;
