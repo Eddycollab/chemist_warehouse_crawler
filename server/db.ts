@@ -110,6 +110,75 @@ async function runMigrations(connectionString: string) {
       \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
       CONSTRAINT \`products_id\` PRIMARY KEY(\`id\`)
     )`);
+    // ─── Crawl targets table ───────────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`crawl_targets\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`name\` varchar(200) NOT NULL,
+      \`baseUrl\` text NOT NULL,
+      \`productListSelector\` varchar(500) NOT NULL DEFAULT '.product-list',
+      \`productNameSelector\` varchar(500) NOT NULL DEFAULT '.product-name',
+      \`productPriceSelector\` varchar(500) NOT NULL DEFAULT '.product-price',
+      \`productOriginalPriceSelector\` varchar(500),
+      \`productLinkSelector\` varchar(500),
+      \`productImageSelector\` varchar(500),
+      \`paginationParam\` varchar(100) NOT NULL DEFAULT 'page',
+      \`maxPages\` int NOT NULL DEFAULT 10,
+      \`isActive\` boolean NOT NULL DEFAULT true,
+      \`notes\` text,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT \`crawl_targets_id\` PRIMARY KEY(\`id\`)
+    )`);
+    // ─── News sources table ────────────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`news_sources\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`name\` varchar(200) NOT NULL,
+      \`url\` text NOT NULL,
+      \`articleSelector\` varchar(500) NOT NULL DEFAULT 'article',
+      \`titleSelector\` varchar(500) NOT NULL DEFAULT '.entry-title a',
+      \`dateSelector\` varchar(500),
+      \`excerptSelector\` varchar(500),
+      \`imageSelector\` varchar(500),
+      \`paginationSelector\` varchar(500),
+      \`maxPages\` int NOT NULL DEFAULT 5,
+      \`isActive\` boolean NOT NULL DEFAULT true,
+      \`notes\` text,
+      \`lastCrawledAt\` timestamp NULL,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      \`updatedAt\` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+      CONSTRAINT \`news_sources_id\` PRIMARY KEY(\`id\`)
+    )`);
+    // ─── News articles table ───────────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`news_articles\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`sourceId\` int,
+      \`sourceName\` varchar(200),
+      \`title\` varchar(1000) NOT NULL,
+      \`url\` text NOT NULL,
+      \`excerpt\` text,
+      \`imageUrl\` text,
+      \`publishedAt\` timestamp NULL,
+      \`crawledAt\` timestamp NOT NULL DEFAULT (now()),
+      \`isRead\` boolean NOT NULL DEFAULT false,
+      \`urlHash\` varchar(64),
+      CONSTRAINT \`news_articles_id\` PRIMARY KEY(\`id\`),
+      CONSTRAINT \`news_articles_urlHash_unique\` UNIQUE(\`urlHash\`)
+    )`);
+    // ─── News crawl jobs table ─────────────────────────────────────────────────
+    await conn.execute(`CREATE TABLE IF NOT EXISTS \`news_crawl_jobs\` (
+      \`id\` int AUTO_INCREMENT NOT NULL,
+      \`sourceId\` int,
+      \`sourceName\` varchar(200),
+      \`jobType\` enum('scheduled','manual') NOT NULL DEFAULT 'manual',
+      \`status\` enum('pending','running','completed','failed','stopped') NOT NULL DEFAULT 'pending',
+      \`newArticles\` int DEFAULT 0,
+      \`totalArticles\` int DEFAULT 0,
+      \`errorMessage\` text,
+      \`startedAt\` timestamp NULL,
+      \`completedAt\` timestamp NULL,
+      \`createdAt\` timestamp NOT NULL DEFAULT (now()),
+      CONSTRAINT \`news_crawl_jobs_id\` PRIMARY KEY(\`id\`)
+    )`);
     // Insert default password if not exists
     await conn.execute(
       `INSERT IGNORE INTO \`crawler_settings\` (\`key\`, \`value\`, \`description\`) VALUES ('access_password', 'CW150721', 'System access password')`

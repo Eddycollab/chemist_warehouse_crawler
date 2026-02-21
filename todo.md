@@ -162,3 +162,7 @@
 - [x] 更新 DashboardLayout.tsx 側邊欄新增「新聞來源」「新聞爬蟲」「新聞文章」三個項目
 - [x] 更新 App.tsx 新增三個新路由（/news/sources, /news/crawler, /news/articles）
 - [x] 儲存 checkpoint 並推送
+
+## 修復 Railway 生產環境 migration 問題
+- [x] 確認 server startup 時自動執行 news 相關表格的 migration
+- [x] 更新 checkpoint 並推送到 Railway 觸發重新部署
