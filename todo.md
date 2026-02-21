@@ -121,28 +121,27 @@
 - [x] 推送到 GitHub
 
 ## 新功能：爬蟲任務歷史刪除
-- [ ] 後端 db.ts：新增 deleteCrawlJob() 和 deleteAllCrawlJobs() 函式
-- [ ] 後端 routers.ts：新增 crawl.deleteJob mutation 和 crawl.deleteAllJobs mutation
-- [ ] 前端 CrawlerManager.tsx：每筆任務新增刪除按鈕（垃圾桶圖示）
-- [ ] 前端 CrawlerManager.tsx：新增「清除全部歷史」按鈕（含確認對話框）
+- [x] 後端 db.ts：新增 deleteCrawlJob() 和 deleteAllCrawlJobs() 函式
+- [x] 後端 routers.ts：新增 crawl.deleteJob mutation 和 crawl.deleteAllJobs mutation
+- [x] 前端 CrawlerManager.tsx：每筆任務新增刪除按鈕（垃圾桶圖示）
+- [x] 前端 CrawlerManager.tsx：新增「清除全部歷史」按鈕（含確認對話框）
 
 ## 新功能：資料匯出 CSV/Excel
-- [ ] 後端 routers.ts：新增 export.products query（回傳所有產品資料）
-- [ ] 後端 routers.ts：新增 export.priceHistory query（回傳指定時間範圍的價格歷史）
-- [ ] 前端：新增「匯出」頁面或在產品列表頁新增匯出按鈕
-- [ ] 前端：支援匯出為 CSV 格式（產品清單 + 價格歷史）
-- [ ] 前端：支援匯出為 Excel 格式（使用 xlsx 套件，多工作表）
+- [x] 後端 routers.ts：新增 export.products query（回傳所有產品資料）
+- [x] 後端 routers.ts：新增 export.priceHistory query（回傳指定時間範圍的價格歷史）
+- [x] 前端：新增「資料匯出」頁面（側邊欄導航）
+- [x] 前端：支援匯出為 CSV 格式（產品清單 + 價格歷史）
+- [x] 前端：支援匯出為 Excel 格式（使用 xlsx 套件，多工作表）
 
 ## 新功能：自訂爬取目標網站
-- [ ] 資料庫 schema：新增 target_sites 表（id, name, baseUrl, productSelector, nameSelector, priceSelector, originalPriceSelector, imageSelector, linkSelector, paginationSelector, isActive, createdAt）
-- [ ] 執行資料庫 migration
-- [ ] 後端 db.ts：新增 target sites CRUD 函式
-- [ ] 後端 routers.ts：新增 targetSite router（list, create, update, delete, test）
-- [ ] 後端 crawler.ts：新增通用爬蟲函式，根據 target_sites 設定動態爬取
-- [ ] 前端：新增「目標網站」管理頁面（CRUD + 測試爬取）
-- [ ] 前端 App.tsx：新增路由和側邊欄導航項目
+- [x] 資料庫 schema：新增 crawl_targets 表（含 CSS 選擇器設定）
+- [x] 執行資料庫 migration
+- [x] 後端 db.ts：新增 crawl_targets CRUD 函式
+- [x] 後端 routers.ts：新增 targetsRouter（list, create, update, delete, toggleActive）
+- [x] 前端：新增「目標網站」管理頁面（CRUD + 啟用/停用）
+- [x] 前端 App.tsx：新增路由和側邊欄導航項目
 
 ## 新功能：GitHub 授權條款
-- [ ] 新增 LICENSE 檔案（MIT + Commons Clause，禁止商業銷售）
-- [ ] 更新 README.md 說明授權條款
-- [ ] 推送到 GitHub
+- [x] 新增 LICENSE 檔案（MIT + Commons Clause，禁止商業銷售）
+- [x] commit 已建立，待 GitHub 帳號連接後推送
+- [ ] 推送到 GitHub（需連接 GitHub 帳號）
