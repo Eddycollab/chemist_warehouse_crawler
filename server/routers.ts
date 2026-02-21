@@ -30,8 +30,24 @@ import {
   createCrawlTarget,
   updateCrawlTarget,
   deleteCrawlTarget,
+  getNewsSources,
+  getNewsSourceById,
+  createNewsSource,
+  updateNewsSource,
+  deleteNewsSource,
+  toggleNewsSourceActive,
+  getNewsArticles,
+  countNewsArticles,
+  markNewsArticleRead,
+  markAllNewsArticlesRead,
+  deleteNewsArticle,
+  deleteAllNewsArticles,
+  getNewsCrawlJobs,
+  deleteNewsCrawlJob,
+  deleteAllNewsCrawlJobs,
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
+import { runNewsCrawl } from "./newsCrawler";
 import * as XLSX from "xlsx";
 import { getSchedulerStatus } from "./scheduler";
 import { PRODUCT_CATEGORIES } from "../drizzle/schema";
@@ -503,6 +519,129 @@ const targetsRouter = router({
     }),
 });
 
+// ─── News Router ─────────────────────────────────────────────────────────────
+
+const newsRouter = router({
+  // Sources CRUD
+  getSources: publicProcedure.query(async () => {
+    return getNewsSources();
+  }),
+  createSource: publicProcedure
+    .input(
+      z.object({
+        name: z.string().min(1),
+        url: z.string().url(),
+        articleSelector: z.string().default("article"),
+        titleSelector: z.string().default(".entry-title a"),
+        dateSelector: z.string().optional(),
+        excerptSelector: z.string().optional(),
+        imageSelector: z.string().optional(),
+        paginationSelector: z.string().optional(),
+        maxPages: z.number().int().min(1).max(50).default(5),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await createNewsSource(input);
+      return { success: true };
+    }),
+  updateSource: publicProcedure
+    .input(
+      z.object({
+        id: z.number(),
+        name: z.string().min(1).optional(),
+        url: z.string().url().optional(),
+        articleSelector: z.string().optional(),
+        titleSelector: z.string().optional(),
+        dateSelector: z.string().optional(),
+        excerptSelector: z.string().optional(),
+        imageSelector: z.string().optional(),
+        paginationSelector: z.string().optional(),
+        maxPages: z.number().int().min(1).max(50).optional(),
+        notes: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const { id, ...data } = input;
+      await updateNewsSource(id, data);
+      return { success: true };
+    }),
+  deleteSource: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteNewsSource(input.id);
+      return { success: true };
+    }),
+  toggleSourceActive: publicProcedure
+    .input(z.object({ id: z.number(), isActive: z.boolean() }))
+    .mutation(async ({ input }) => {
+      await toggleNewsSourceActive(input.id, input.isActive);
+      return { success: true };
+    }),
+
+  // Articles
+  getArticles: publicProcedure
+    .input(
+      z.object({
+        sourceId: z.number().optional(),
+        isRead: z.boolean().optional(),
+        limit: z.number().int().min(1).max(100).default(50),
+        offset: z.number().int().min(0).default(0),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      const articles = await getNewsArticles(input ?? {});
+      const total = await countNewsArticles(input ?? {});
+      return { articles, total };
+    }),
+  markRead: publicProcedure
+    .input(z.object({ id: z.number(), isRead: z.boolean() }))
+    .mutation(async ({ input }) => {
+      await markNewsArticleRead(input.id, input.isRead);
+      return { success: true };
+    }),
+  markAllRead: publicProcedure
+    .input(z.object({ sourceId: z.number().optional() }).optional())
+    .mutation(async ({ input }) => {
+      await markAllNewsArticlesRead(input?.sourceId);
+      return { success: true };
+    }),
+  deleteArticle: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteNewsArticle(input.id);
+      return { success: true };
+    }),
+  deleteAllArticles: publicProcedure
+    .input(z.object({ sourceId: z.number().optional() }).optional())
+    .mutation(async ({ input }) => {
+      await deleteAllNewsArticles(input?.sourceId);
+      return { success: true };
+    }),
+
+  // Crawl Jobs
+  getJobs: publicProcedure.query(async () => {
+    return getNewsCrawlJobs(30);
+  }),
+  startCrawl: publicProcedure
+    .input(z.object({ sourceId: z.number() }))
+    .mutation(async ({ input }) => {
+      // Run in background
+      runNewsCrawl(input.sourceId).catch(console.error);
+      return { success: true, message: "爬取任務已啟動，請稍後查看結果" };
+    }),
+  deleteJob: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await deleteNewsCrawlJob(input.id);
+      return { success: true };
+    }),
+  deleteAllJobs: publicProcedure.mutation(async () => {
+    await deleteAllNewsCrawlJobs();
+    return { success: true };
+  }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -521,6 +660,7 @@ export const appRouter = router({
   settings: settingsRouter,
   export: exportRouter,
   targets: targetsRouter,
+  news: newsRouter,
 });
 
 export type AppRouter = typeof appRouter;

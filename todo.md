@@ -145,3 +145,20 @@
 - [x] 新增 LICENSE 檔案（MIT + Commons Clause，禁止商業銷售）
 - [x] commit 已建立，待 GitHub 帳號連接後推送
 - [ ] 推送到 GitHub（需連接 GitHub 帳號）
+
+## 新聞監控功能模組
+- [x] schema.ts 新增 news_sources 表（新聞來源目標設定）
+- [x] schema.ts 新增 news_articles 表（爬取的新聞文章）
+- [x] schema.ts 新增 news_crawl_jobs 表（新聞爬蟲任務歷史）
+- [x] 執行資料庫 migration
+- [x] db.ts 新增 news_sources CRUD 函式
+- [x] db.ts 新增 news_articles 查詢函式
+- [x] db.ts 新增 news_crawl_jobs 函式
+- [x] 新增 newsCrawler.ts 新聞爬蟲邏輯（通用 WordPress/部落格格式）
+- [x] routers.ts 新增 newsRouter（sources CRUD + jobs + articles 查詢）
+- [x] 前端：建立 NewsSources.tsx（新聞來源管理頁面）
+- [x] 前端：建立 NewsCrawler.tsx（新聞爬蟲管理頁面）
+- [x] 前端：建立 NewsArticles.tsx（新聞文章列表頁面）
+- [x] 更新 DashboardLayout.tsx 側邊欄新增「新聞來源」「新聞爬蟲」「新聞文章」三個項目
+- [x] 更新 App.tsx 新增三個新路由（/news/sources, /news/crawler, /news/articles）
+- [x] 儲存 checkpoint 並推送

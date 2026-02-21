@@ -170,3 +170,67 @@ export const crawlTargets = mysqlTable("crawl_targets", {
 
 export type CrawlTarget = typeof crawlTargets.$inferSelect;
 export type InsertCrawlTarget = typeof crawlTargets.$inferInsert;
+
+/**
+ * News sources table - user-defined news/blog websites to monitor
+ */
+export const newsSources = mysqlTable("news_sources", {
+  id: int("id").autoincrement().primaryKey(),
+  name: varchar("name", { length: 200 }).notNull(),
+  url: text("url").notNull(),
+  articleSelector: text("articleSelector").notNull().default("article"),
+  titleSelector: text("titleSelector").notNull().default(".entry-title a"),
+  dateSelector: text("dateSelector").default(".entry-date"),
+  excerptSelector: text("excerptSelector").default(".entry-summary"),
+  imageSelector: text("imageSelector").default(".wp-post-image"),
+  paginationSelector: text("paginationSelector").default(".pagination a.next"),
+  maxPages: int("maxPages").default(5).notNull(),
+  isActive: boolean("isActive").default(true).notNull(),
+  notes: text("notes"),
+  lastCrawledAt: timestamp("lastCrawledAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export type NewsSource = typeof newsSources.$inferSelect;
+export type InsertNewsSource = typeof newsSources.$inferInsert;
+
+/**
+ * News articles table - crawled news articles
+ */
+export const newsArticles = mysqlTable("news_articles", {
+  id: int("id").autoincrement().primaryKey(),
+  sourceId: int("sourceId").notNull(),
+  sourceName: varchar("sourceName", { length: 200 }).notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  url: text("url").notNull(),
+  publishedAt: varchar("publishedAt", { length: 100 }),
+  excerpt: text("excerpt"),
+  imageUrl: text("imageUrl"),
+  isRead: boolean("isRead").default(false).notNull(),
+  crawledAt: timestamp("crawledAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type NewsArticle = typeof newsArticles.$inferSelect;
+export type InsertNewsArticle = typeof newsArticles.$inferInsert;
+
+/**
+ * News crawl jobs table - news crawl task history
+ */
+export const newsCrawlJobs = mysqlTable("news_crawl_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  sourceId: int("sourceId"),
+  sourceName: varchar("sourceName", { length: 200 }),
+  jobType: mysqlEnum("jobType", ["scheduled", "manual"]).default("manual").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed", "stopped"]).default("pending").notNull(),
+  newArticles: int("newArticles").default(0),
+  totalArticles: int("totalArticles").default(0),
+  errorMessage: text("errorMessage"),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type NewsCrawlJob = typeof newsCrawlJobs.$inferSelect;
+export type InsertNewsCrawlJob = typeof newsCrawlJobs.$inferInsert;

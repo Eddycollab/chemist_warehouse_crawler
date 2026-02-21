@@ -16,6 +16,12 @@ import {
   InsertNotification,
   InsertCrawlTarget,
   ProductCategory,
+  newsSources,
+  newsArticles,
+  newsCrawlJobs,
+  InsertNewsSource,
+  InsertNewsArticle,
+  InsertNewsCrawlJob,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -476,3 +482,141 @@ export async function deleteCrawlTarget(id: number) {
   return db.delete(crawlTargets).where(eq(crawlTargets.id, id));
 }
 
+
+// ============================================================
+// News Sources
+// ============================================================
+export async function getNewsSources() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(newsSources).orderBy(desc(newsSources.createdAt));
+}
+export async function getNewsSourceById(id: number) {
+  const db = await getDb();
+  if (!db) return null;
+  const rows = await db.select().from(newsSources).where(eq(newsSources.id, id));
+  return rows[0] ?? null;
+}
+export async function createNewsSource(data: InsertNewsSource) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(newsSources).values(data);
+}
+export async function updateNewsSource(id: number, data: Partial<InsertNewsSource>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(newsSources).set({ ...data, updatedAt: new Date() }).where(eq(newsSources.id, id));
+}
+export async function deleteNewsSource(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Also delete related articles and jobs
+  await db.delete(newsArticles).where(eq(newsArticles.sourceId, id));
+  await db.delete(newsCrawlJobs).where(eq(newsCrawlJobs.sourceId, id));
+  return db.delete(newsSources).where(eq(newsSources.id, id));
+}
+export async function toggleNewsSourceActive(id: number, isActive: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(newsSources).set({ isActive, updatedAt: new Date() }).where(eq(newsSources.id, id));
+}
+
+// ============================================================
+// News Articles
+// ============================================================
+export async function getNewsArticles(opts?: { sourceId?: number; isRead?: boolean; limit?: number; offset?: number }) {
+  const db = await getDb();
+  if (!db) return [];
+  const conditions = [];
+  if (opts?.sourceId !== undefined) conditions.push(eq(newsArticles.sourceId, opts.sourceId));
+  if (opts?.isRead !== undefined) conditions.push(eq(newsArticles.isRead, opts.isRead));
+  const query = db.select().from(newsArticles)
+    .where(conditions.length > 0 ? and(...conditions) : undefined)
+    .orderBy(desc(newsArticles.crawledAt))
+    .limit(opts?.limit ?? 50)
+    .offset(opts?.offset ?? 0);
+  return query;
+}
+export async function countNewsArticles(opts?: { sourceId?: number; isRead?: boolean }) {
+  const db = await getDb();
+  if (!db) return 0;
+  const conditions = [];
+  if (opts?.sourceId !== undefined) conditions.push(eq(newsArticles.sourceId, opts.sourceId));
+  if (opts?.isRead !== undefined) conditions.push(eq(newsArticles.isRead, opts.isRead));
+  const rows = await db.select({ count: sql<number>`count(*)` }).from(newsArticles)
+    .where(conditions.length > 0 ? and(...conditions) : undefined);
+  return Number(rows[0]?.count ?? 0);
+}
+export async function upsertNewsArticle(data: InsertNewsArticle) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Check if article with same URL already exists
+  const existing = await db.select({ id: newsArticles.id }).from(newsArticles)
+    .where(eq(newsArticles.url, data.url as string));
+  if (existing.length > 0) return { inserted: false, id: existing[0].id };
+  const result = await db.insert(newsArticles).values(data);
+  return { inserted: true, id: (result as any).insertId };
+}
+export async function markNewsArticleRead(id: number, isRead: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(newsArticles).set({ isRead }).where(eq(newsArticles.id, id));
+}
+export async function markAllNewsArticlesRead(sourceId?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (sourceId !== undefined) {
+    return db.update(newsArticles).set({ isRead: true }).where(eq(newsArticles.sourceId, sourceId));
+  }
+  return db.update(newsArticles).set({ isRead: true });
+}
+export async function deleteNewsArticle(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(newsArticles).where(eq(newsArticles.id, id));
+}
+export async function deleteAllNewsArticles(sourceId?: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  if (sourceId !== undefined) {
+    return db.delete(newsArticles).where(eq(newsArticles.sourceId, sourceId));
+  }
+  return db.delete(newsArticles);
+}
+
+// ============================================================
+// News Crawl Jobs
+// ============================================================
+export async function getNewsCrawlJobs(limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(newsCrawlJobs).orderBy(desc(newsCrawlJobs.createdAt)).limit(limit);
+}
+export async function createNewsCrawlJob(data: InsertNewsCrawlJob) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const result = await db.insert(newsCrawlJobs).values(data);
+  return (result as any).insertId as number;
+}
+export async function updateNewsCrawlJob(id: number, data: Partial<InsertNewsCrawlJob>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.update(newsCrawlJobs).set(data).where(eq(newsCrawlJobs.id, id));
+}
+export async function deleteNewsCrawlJob(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(newsCrawlJobs).where(eq(newsCrawlJobs.id, id));
+}
+export async function deleteAllNewsCrawlJobs() {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.delete(newsCrawlJobs);
+}
+export async function resetStuckNewsCrawlJobs() {
+  const db = await getDb();
+  if (!db) return;
+  await db.update(newsCrawlJobs)
+    .set({ status: "stopped", completedAt: new Date() })
+    .where(eq(newsCrawlJobs.status, "running"));
+}

@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, PanelLeft, Package, Bell, Settings, Bot, TrendingDown, Download, Globe } from "lucide-react";
+import { LayoutDashboard, PanelLeft, Package, Bell, Settings, Bot, TrendingDown, Download, Globe, Rss, Activity, Newspaper } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -23,6 +23,9 @@ const menuItems = [
   { icon: Bot, label: "爬蟲管理", path: "/crawler" },
   { icon: Download, label: "資料匯出", path: "/export" },
   { icon: Globe, label: "目標網站", path: "/targets" },
+  { icon: Rss, label: "新聞來源", path: "/news/sources" },
+  { icon: Activity, label: "新聞爬蟲", path: "/news/crawler" },
+  { icon: Newspaper, label: "新聞文章", path: "/news/articles" },
   { icon: Bell, label: "通知中心", path: "/notifications" },
   { icon: Settings, label: "系統設定", path: "/settings" },
 ];
