@@ -3,6 +3,14 @@
  *
  * Uses playwright-extra + stealth plugin to bypass Cloudflare/bot detection.
  * Features: stealth mode, random delays, cookie persistence, random viewport.
+ *
+ * Fixed issues (2026-02-21):
+ * - Updated category URLs to match CW's current URL structure
+ * - Fixed pagination parameter: ?page=N (was ?pageNumber=N)
+ * - Fixed RRP calculation: "$X.XX Off RRP" → originalPrice = currentPrice + discount
+ * - Fixed wait strategy: waitForSelector instead of networkidle
+ * - Fixed browser context lifecycle: each subcategory gets its own context
+ * - Fixed product name extraction: link.textContent is the product name
  */
 
 import {
@@ -82,31 +90,29 @@ export function getCrawlProgress(): CrawlProgress & { running: boolean } {
   return { ..._crawlProgress, running: _currentJobId !== null };
 }
 
-// Category URL mappings for Chemist Warehouse
+// ─── Category URL mappings for Chemist Warehouse ─────────────────────────────
+// URL format: https://www.chemistwarehouse.com.au/shop-online/{id}/{slug}?page={n}
+// Verified on 2026-02-21
+
 const CATEGORY_URLS: Record<string, { id: number; slug: string; label: string }[]> = {
   beauty_skincare: [
-    { id: 300026, slug: "skincare-tools", label: "Skincare Tools" },
-    { id: 300019, slug: "skincare", label: "Skincare" },
-    { id: 300022, slug: "face-care", label: "Face Care" },
-    { id: 300023, slug: "body-care", label: "Body Care" },
-    { id: 300024, slug: "hair-care", label: "Hair Care" },
-    { id: 300025, slug: "sun-care", label: "Sun Care" },
+    { id: 665, slug: "skin-care", label: "Skincare" },
+    { id: 648, slug: "cosmetics", label: "Cosmetics" },
+    { id: 129, slug: "hair-care", label: "Hair Care" },
+    { id: 259, slug: "personal-care", label: "Personal Care" },
   ],
   adult_health: [
-    { id: 500019, slug: "mens-health", label: "Men's Health" },
-    { id: 500020, slug: "womens-health", label: "Women's Health" },
-    { id: 500021, slug: "vitamins-supplements", label: "Vitamins & Supplements" },
+    { id: 81, slug: "vitamins-supplements", label: "Vitamins & Supplements" },
+    { id: 1255, slug: "sports-nutrition", label: "Sport & Fitness" },
   ],
   childrens_health: [
-    { id: 600010, slug: "baby-care", label: "Baby Care" },
-    { id: 600011, slug: "childrens-vitamins", label: "Children's Vitamins" },
+    { id: 20, slug: "baby-care", label: "Pregnancy & Baby" },
   ],
   vegan_health: [
-    { id: 700010, slug: "vegan-supplements", label: "Vegan Supplements" },
+    { id: 81, slug: "vitamins-supplements", label: "Vitamins & Supplements (Vegan)" },
   ],
   natural_soap: [
-    { id: 800010, slug: "natural-soap", label: "Natural Soap" },
-    { id: 800011, slug: "body-wash", label: "Body Wash" },
+    { id: 259, slug: "personal-care", label: "Personal Care (Soaps)" },
   ],
 };
 
@@ -225,7 +231,8 @@ async function closeBrowser(): Promise<void> {
 // ─── Category Scraper ─────────────────────────────────────────────────────────
 
 /**
- * Scrapes a category page and returns discovered products.
+ * Scrapes a single page of a category and returns discovered products.
+ * Each call creates its own browser context to avoid context lifecycle issues.
  */
 async function scrapeCategoryPage(
   categoryId: number,
@@ -235,6 +242,7 @@ async function scrapeCategoryPage(
   const browser = await getBrowser();
   const savedCookies = loadCookies();
 
+  // Each subcategory scrape gets its own fresh context
   const context = await browser.newContext({
     userAgent: randomUserAgent(),
     locale: "en-AU",
@@ -268,12 +276,15 @@ async function scrapeCategoryPage(
 
   try {
     for (let page = 1; page <= maxPages; page++) {
-      const url = `https://www.chemistwarehouse.com.au/shop-online/${categoryId}/${slug}?pageNumber=${page}`;
+      // CW pagination uses ?page=N (not ?pageNumber=N)
+      const url = page === 1
+        ? `https://www.chemistwarehouse.com.au/shop-online/${categoryId}/${slug}`
+        : `https://www.chemistwarehouse.com.au/shop-online/${categoryId}/${slug}?page=${page}`;
+
       const pageObj = await context.newPage();
 
-      // Simulate human-like behavior: random mouse movements
+      // Override automation detection signals
       await pageObj.addInitScript(() => {
-        // Override navigator properties to hide automation
         Object.defineProperty(navigator, "webdriver", { get: () => undefined });
         Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
         Object.defineProperty(navigator, "languages", { get: () => ["en-AU", "en"] });
@@ -281,106 +292,125 @@ async function scrapeCategoryPage(
         window.chrome = { runtime: {} };
       });
 
-        try {
-          console.log(`[Crawler] Scraping category page: ${url}`);
-          await pageObj.goto(url, { waitUntil: "networkidle", timeout: 45000 });
+      try {
+        console.log(`[Crawler] Scraping: ${url}`);
 
-          // Accept cookie banner if present
-          await pageObj.click('#onetrust-accept-btn-handler').catch(() => {});
-          await sleep(500, 1000);
+        // Navigate and wait for DOM content (faster than networkidle)
+        await pageObj.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
 
-          // Wait for product list items to appear (CW uses <li> cards)
-          await pageObj.waitForSelector('li a[href*="/buy/"]', {
-            timeout: 20000,
-          }).catch(() => {});
+        // Accept cookie banner if present (non-blocking)
+        await pageObj.click('#onetrust-accept-btn-handler').catch(() => {});
 
-          // Simulate human scrolling
-          await pageObj.evaluate(() => {
-            window.scrollTo({ top: 300, behavior: "smooth" });
+        // Wait for product links to appear - this is the key selector
+        // CW renders product cards as <li> elements with <a href="/buy/..."> links
+        const productLinksVisible = await pageObj.waitForSelector(
+          'a[href*="/buy/"]',
+          { timeout: 30000, state: "attached" }
+        ).then(() => true).catch(() => false);
+
+        if (!productLinksVisible) {
+          console.warn(`[Crawler] No product links found on ${url} after 30s wait`);
+          // Log page title to help diagnose
+          const title = await pageObj.title().catch(() => "unknown");
+          console.warn(`[Crawler] Page title: ${title}`);
+          await pageObj.close();
+          break;
+        }
+
+        // Simulate human scrolling to trigger lazy-loaded content
+        await pageObj.evaluate(() => {
+          window.scrollTo({ top: 400, behavior: "smooth" });
+        });
+        await sleep(500, 1000);
+        await pageObj.evaluate(() => {
+          window.scrollTo({ top: 900, behavior: "smooth" });
+        });
+        await sleep(300, 700);
+
+        // Extract products from the page
+        const products = await pageObj.evaluate(() => {
+          const results: Array<{
+            name: string;
+            url: string;
+            price: string;
+            discountAmount: string;
+            imageUrl: string;
+          }> = [];
+
+          // CW product cards: <li> containing <a href="/buy/...">ProductName</a>
+          const productLinks = document.querySelectorAll('a[href*="/buy/"]');
+          const seen = new Set<string>();
+
+          productLinks.forEach((link) => {
+            const href = (link as HTMLAnchorElement).href;
+            if (!href || seen.has(href)) return;
+            seen.add(href);
+
+            // Product name is the link's text content directly
+            const name = link.textContent?.trim() || "";
+            if (!name) return;
+
+            // The product card is the closest <li>
+            const card = link.closest("li");
+            if (!card) return;
+
+            // Current price: <p class="text-colour-title-light headline-xl">$X.XX</p>
+            let price = "";
+            const priceEl = card.querySelector('p.text-colour-title-light.headline-xl');
+            if (priceEl) {
+              price = priceEl.textContent?.trim() || "";
+            }
+            // Fallback: find any <p> starting with $
+            if (!price) {
+              const allPs = Array.from(card.querySelectorAll("p"));
+              const priceP = allPs.find(p => p.textContent?.trim().startsWith("$"));
+              if (priceP) price = priceP.textContent?.trim() || "";
+            }
+
+            if (!price) return;
+
+            // Discount amount: <p class="text-brand-red body-s-emphasis">$X.XX Off RRP</p>
+            // Format: "$X.XX Off RRP" — originalPrice = currentPrice + discountAmount
+            let discountAmount = "";
+            const discountEl = card.querySelector('p.text-brand-red.body-s-emphasis');
+            if (discountEl) {
+              const discountText = discountEl.textContent?.trim() || "";
+              // Match "$X.XX Off RRP" or "$X.XX Off EDLP"
+              const match = discountText.match(/^\$([\d.]+)\s+Off/);
+              if (match) {
+                discountAmount = match[1];
+              }
+            }
+
+            // Product image
+            let imageUrl = "";
+            const img = card.querySelector("img");
+            if (img) {
+              imageUrl = img.src || img.getAttribute("data-src") || "";
+            }
+
+            if (name && href && price) {
+              results.push({ name, url: href, price, discountAmount, imageUrl });
+            }
           });
-          await sleep(400, 900);
-          await pageObj.evaluate(() => {
-            window.scrollTo({ top: 700, behavior: "smooth" });
-          });
-          await sleep(300, 700);
 
-          // Extract products from the page
-          const products = await pageObj.evaluate(() => {
-            const results: Array<{
-              name: string;
-              url: string;
-              price: string;
-              originalPrice: string;
-              imageUrl: string;
-              brand: string;
-            }> = [];
+          return results;
+        });
 
-            // CW uses <li> cards with <a href*="/buy/"> links
-            const productLinks = document.querySelectorAll('a[href*="/buy/"]');
-            const seen = new Set<string>();
-
-            productLinks.forEach((link) => {
-              const href = (link as HTMLAnchorElement).href;
-              if (!href || seen.has(href)) return;
-              seen.add(href);
-
-              // CW product card is wrapped in <li>
-              const card = link.closest("li") || link.closest("article") || link.parentElement?.parentElement;
-
-              // Get product name - CW uses <p> inside the link
-              let name = "";
-              const nameEl = link.querySelector("p") || link.querySelector("span");
-              if (nameEl) {
-                name = nameEl.textContent?.trim() || "";
-              }
-              if (!name) {
-                name = link.textContent?.trim().split("\n")[0].trim() || "";
-              }
-
-              // Get price - CW uses <p class="text-colour-title-light headline-xl"> for current price
-              // and <p class="text-brand-red body-s-emphasis"> for discount info
-              let price = "";
-              let originalPrice = "";
-
-              // Find all <p> and <span> elements starting with $
-              const allEls = Array.from(card?.querySelectorAll("p, span") || []);
-              const priceEls = allEls.filter(el => el.textContent?.trim().startsWith("$"));
-
-              if (priceEls.length > 0) {
-                // First $ element is current price
-                price = priceEls[0].textContent?.trim() || "";
-              }
-
-              // Look for RRP/original price ("Was $X" or "$X Off RRP" pattern)
-              const rrpText = card?.textContent || "";
-              const rrpMatch = rrpText.match(/RRP\s*\$([\d.]+)/);
-              if (rrpMatch) {
-                originalPrice = "$" + rrpMatch[1];
-              }
-
-              // Get image
-              let imageUrl = "";
-              const img = card?.querySelector("img");
-              if (img) {
-                imageUrl = img.src || img.getAttribute("data-src") || "";
-              }
-
-              // Get brand (not always present in CW cards, skip)
-              const brand = "";
-
-              if (name && href && price) {
-                results.push({ name, url: href, price, originalPrice, imageUrl, brand });
-              }
-            });
-
-            return results;
-          });
+        console.log(`[Crawler] Found ${products.length} products on page ${page} of ${slug}`);
 
         for (const p of products) {
           const currentPrice = parsePrice(p.price);
-          const origPrice = parsePrice(p.originalPrice);
-
           if (!currentPrice) continue;
+
+          // Calculate original price: currentPrice + discountAmount
+          let origPrice: number | undefined;
+          if (p.discountAmount) {
+            const discount = parseFloat(p.discountAmount);
+            if (!isNaN(discount) && discount > 0) {
+              origPrice = Math.round((currentPrice + discount) * 100) / 100;
+            }
+          }
 
           const isOnSale = !!(origPrice && origPrice > currentPrice);
           const discountPercent = isOnSale ? calculateDiscountPercent(origPrice!, currentPrice) : undefined;
@@ -393,12 +423,9 @@ async function scrapeCategoryPage(
             isOnSale,
             discountPercent,
             imageUrl: p.imageUrl || undefined,
-            brand: p.brand || undefined,
             sku: extractSkuFromUrl(p.url),
           });
         }
-
-        console.log(`[Crawler] Found ${products.length} products on page ${page}`);
 
         // Save cookies after successful page load
         const cookies = await context.cookies();
@@ -407,24 +434,32 @@ async function scrapeCategoryPage(
         }
 
         // Check if there are more pages
+        // CW uses ?page=N format and has a "NEXT" link
         const hasNextPage = await pageObj.evaluate(() => {
-          const nextBtn = document.querySelector('[aria-label="Next page"], [class*="next"], a[rel="next"]');
-          return !!nextBtn && !nextBtn.hasAttribute("disabled");
+          // Look for next page link
+          const nextLink = document.querySelector('a[href*="?page="]');
+          const nextBtn = document.querySelector('[aria-label="Go to next page"]');
+          return !!(nextLink || nextBtn);
         }).catch(() => false);
 
         await pageObj.close();
 
-        if (!hasNextPage || products.length === 0) break;
+        if (!hasNextPage || products.length === 0) {
+          console.log(`[Crawler] No more pages for ${slug} (hasNextPage=${hasNextPage}, products=${products.length})`);
+          break;
+        }
 
         // Random delay between pages
         await sleep();
+
       } catch (err) {
-        console.error(`[Crawler] Error on category page ${url}:`, err);
+        console.error(`[Crawler] Error on page ${page} of ${url}:`, err);
         await pageObj.close().catch(() => {});
         break;
       }
     }
   } finally {
+    // Always close the context when done with this subcategory
     await context.close().catch(() => {});
   }
 

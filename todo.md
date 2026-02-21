@@ -98,3 +98,8 @@
 - [x] 後端 routers.ts：crawl.start 接受 testMode 參數
 - [x] 前端 CrawlerManager.tsx：加入「測試爬蟲」按鈕（選擇品類後可選測試模式）
 - [x] 前端 CrawlerManager.tsx：執行中橫幅顯示目前品類和完成百分比
+
+## 修復爬蟲核心 Bug（第二輪）
+- [ ] 修正等待策略：改用等待特定產品元素出現（而非 networkidle）
+- [ ] 修正 browserContext 生命週期：確保每個品類使用獨立且不會提前關閉的 context
+- [ ] 加入更詳細的 debug 日誌（輸出頁面 title 和 URL，確認頁面有正確載入）
