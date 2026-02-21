@@ -100,6 +100,12 @@
 - [x] 前端 CrawlerManager.tsx：執行中橫幅顯示目前品類和完成百分比
 
 ## 修復爬蟲核心 Bug（第二輪）
-- [ ] 修正等待策略：改用等待特定產品元素出現（而非 networkidle）
-- [ ] 修正 browserContext 生命週期：確保每個品類使用獨立且不會提前關閉的 context
-- [ ] 加入更詳細的 debug 日誌（輸出頁面 title 和 URL，確認頁面有正確載入）
+- [x] 修正等待策略：改用等待特定產品元素出現（而非 networkidle）
+- [x] 修正 browserContext 生命週期：確保每個品類使用獨立且不會提前關閉的 context
+- [x] 加入更詳細的 debug 日誌（輸出頁面 title 和 URL，確認頁面有正確載入）
+
+## 新增 Oral Care 和 Medicines 分類
+- [x] 從 CW 導航選單確認 Oral Care 的正確分類 ID（ID=159, slug=oral-care）
+- [x] 從 CW 導航選單確認 Medicines 的正確分類 ID（ID=258, slug=medicines）
+- [x] 更新 CATEGORY_URLS 新增兩個分類
+- [x] 推送到 GitHub

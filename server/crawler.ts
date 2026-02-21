@@ -114,6 +114,12 @@ const CATEGORY_URLS: Record<string, { id: number; slug: string; label: string }[
   natural_soap: [
     { id: 259, slug: "personal-care", label: "Personal Care (Soaps)" },
   ],
+  oral_care: [
+    { id: 159, slug: "oral-care", label: "Oral Care" },
+  ],
+  medicines: [
+    { id: 258, slug: "medicines", label: "Medicines" },
+  ],
 };
 
 // ─── Utility Functions ────────────────────────────────────────────────────────
