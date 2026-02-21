@@ -4,6 +4,8 @@ export const CATEGORY_LABELS: Record<string, string> = {
   childrens_health: "兒童保健",
   vegan_health: "純素保健",
   natural_soap: "天然香皂",
+  oral_care: "口腔保健",
+  medicines: "藥品",
   other: "其他",
 };
 
@@ -13,6 +15,8 @@ export const CATEGORY_COLORS: Record<string, string> = {
   childrens_health: "text-yellow-400",
   vegan_health: "text-green-400",
   natural_soap: "text-purple-400",
+  oral_care: "text-cyan-400",
+  medicines: "text-orange-400",
   other: "text-muted-foreground",
 };
 

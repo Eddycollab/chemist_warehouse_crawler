@@ -180,6 +180,10 @@ const productRouter = router({
           "\u7d14\u7d20\u4fdd\u5065": "vegan_health",
           natural_soap: "natural_soap",
           "\u5929\u7136\u9999\u7682": "natural_soap",
+          oral_care: "oral_care",
+          "\u53e3\u8154\u4fdd\u5065": "oral_care",
+          medicines: "medicines",
+          "\u85e5\u54c1": "medicines",
           other: "other",
           "\u5176\u4ed6": "other",
         };
@@ -226,6 +230,8 @@ const productRouter = router({
         children_health: "\u5152\u7ae5\u4fdd\u5065",
         vegan_health: "\u7d14\u7d20\u4fdd\u5065",
         natural_soap: "\u5929\u7136\u9999\u7682",
+        oral_care: "\u53e3\u8154\u4fdd\u5065",
+        medicines: "\u85e5\u54c1",
       },
     };
   }),

@@ -1,0 +1,3 @@
+ALTER TABLE `crawl_jobs` MODIFY COLUMN `status` enum('pending','running','completed','failed','stopped') NOT NULL DEFAULT 'pending';--> statement-breakpoint
+ALTER TABLE `crawl_jobs` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all') DEFAULT 'all';--> statement-breakpoint
+ALTER TABLE `products` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other') NOT NULL DEFAULT 'other';

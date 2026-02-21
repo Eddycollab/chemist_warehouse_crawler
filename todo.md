@@ -109,3 +109,13 @@
 - [x] 從 CW 導航選單確認 Medicines 的正確分類 ID（ID=258, slug=medicines）
 - [x] 更新 CATEGORY_URLS 新增兩個分類
 - [x] 推送到 GitHub
+
+## 修復 browserContext 提前關閉 Bug（第三輪）
+- [x] 分析 crawler.ts 的 context 生命週期管理邏輯
+- [x] 修復：移除 browser 單例模式，每個子品類建立獨立 browser + context，finally 內同時關閉 context 和 browser
+- [x] 更新 schema.ts PRODUCT_CATEGORIES enum 新增 oral_care 和 medicines
+- [x] 執行資料庫 migration 更新 crawl_jobs 和 products 表的 category enum
+- [x] 更新前端品類選擇器（CrawlerManager、Products）
+- [x] 更新 categoryLabels.ts 新增標籤和顏色
+- [x] 更新 routers.ts catMap 和 categoryLabels
+- [x] 推送到 GitHub

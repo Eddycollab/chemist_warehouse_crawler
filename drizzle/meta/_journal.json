@@ -15,6 +15,13 @@
       "when": 1771560896791,
       "tag": "0001_mushy_nightcrawler",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "5",
+      "when": 1771667758416,
+      "tag": "0002_crazy_maria_hill",
+      "breakpoints": true
     }
   ]
 }

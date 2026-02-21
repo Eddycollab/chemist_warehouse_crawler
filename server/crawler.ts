@@ -196,19 +196,18 @@ function saveCookies(cookies: object[]): void {
 
 // ─── Playwright Stealth Browser Manager ──────────────────────────────────────
 
-let browserInstance: import("playwright").Browser | null = null;
-
-async function getBrowser(): Promise<import("playwright").Browser> {
-  if (browserInstance && browserInstance.isConnected()) {
-    return browserInstance;
-  }
-
-  // Use playwright-extra with stealth plugin
+/**
+ * Creates a fresh browser instance for each subcategory scrape.
+ * Using a singleton browser caused context-closed errors when one subcategory
+ * crashed the context — subsequent subcategories would fail on newPage().
+ * By creating a new browser per subcategory, each scrape is fully isolated.
+ */
+async function createBrowser(): Promise<import("playwright").Browser> {
   const { chromium: playwrightChromium } = await import("playwright-extra");
   const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
   playwrightChromium.use(StealthPlugin());
 
-  browserInstance = await playwrightChromium.launch({
+  return playwrightChromium.launch({
     headless: true,
     args: [
       "--no-sandbox",
@@ -224,14 +223,6 @@ async function getBrowser(): Promise<import("playwright").Browser> {
       "--lang=en-AU",
     ],
   });
-  return browserInstance;
-}
-
-async function closeBrowser(): Promise<void> {
-  if (browserInstance) {
-    await browserInstance.close().catch(() => {});
-    browserInstance = null;
-  }
 }
 
 // ─── Category Scraper ─────────────────────────────────────────────────────────
@@ -245,10 +236,11 @@ async function scrapeCategoryPage(
   slug: string,
   maxPages = 3
 ): Promise<CrawledProductData[]> {
-  const browser = await getBrowser();
+  // Each subcategory gets its own fresh browser + context for full isolation.
+  // This prevents a crashed context from affecting subsequent subcategories.
+  const browser = await createBrowser();
   const savedCookies = loadCookies();
 
-  // Each subcategory scrape gets its own fresh context
   const context = await browser.newContext({
     userAgent: randomUserAgent(),
     locale: "en-AU",
@@ -465,8 +457,9 @@ async function scrapeCategoryPage(
       }
     }
   } finally {
-    // Always close the context when done with this subcategory
+    // Close context then browser to fully release all resources
     await context.close().catch(() => {});
+    await browser.close().catch(() => {});
   }
 
   return discoveredProducts;
@@ -676,7 +669,7 @@ export async function runCrawl(options: {
                   sku: product.sku || null,
                   url: product.url,
                   imageUrl: product.imageUrl || null,
-                  category: cat as "beauty_skincare" | "adult_health" | "childrens_health" | "vegan_health" | "natural_soap" | "other",
+                  category: cat as "beauty_skincare" | "adult_health" | "childrens_health" | "vegan_health" | "natural_soap" | "oral_care" | "medicines" | "other",
                   currentPrice: String(product.currentPrice),
                   originalPrice: product.originalPrice ? String(product.originalPrice) : null,
                   isOnSale: product.isOnSale ?? false,
@@ -726,7 +719,8 @@ export async function runCrawl(options: {
     console.error("[Crawler] Fatal error:", error);
     failedCount++;
   } finally {
-    await closeBrowser();
+    // Browser lifecycle is managed per-subcategory in scrapeCategoryPage().
+    // Nothing to close here at the job level.
     _currentJobId = null;
     _crawlStopped = false;
     _crawlProgress = {

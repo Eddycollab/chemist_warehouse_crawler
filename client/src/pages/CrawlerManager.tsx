@@ -45,11 +45,13 @@ function getStatusBadge(status: string) {
 
 const CRAWL_CATEGORIES = [
   { value: "all", label: "全部品類" },
-  { value: "beauty_skincare", label: "美妝護膚" },
+  { value: "beauty_skincare", label: "美妚護膚" },
   { value: "adult_health", label: "成人保健" },
   { value: "childrens_health", label: "兒童保健" },
   { value: "vegan_health", label: "純素保健" },
   { value: "natural_soap", label: "天然香皂" },
+  { value: "oral_care", label: "口腔保健" },
+  { value: "medicines", label: "藥品" },
 ];
 
 export default function CrawlerManager() {

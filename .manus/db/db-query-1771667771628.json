@@ -1,0 +1,9 @@
+{
+  "query": "ALTER TABLE `crawl_jobs` MODIFY COLUMN `status` enum('pending','running','completed','failed','stopped') NOT NULL DEFAULT 'pending';\nALTER TABLE `crawl_jobs` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all') DEFAULT 'all';\nALTER TABLE `products` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other') NOT NULL DEFAULT 'other';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute ALTER TABLE `crawl_jobs` MODIFY COLUMN `status` enum('pending','running','completed','failed','stopped') NOT NULL DEFAULT 'pending';\nALTER TABLE `crawl_jobs` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all') DEFAULT 'all';\nALTER TABLE `products` MODIFY COLUMN `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other') NOT NULL DEFAULT 'other';",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 3069
+}

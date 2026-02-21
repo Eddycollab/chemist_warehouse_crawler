@@ -37,17 +37,21 @@ export const PRODUCT_CATEGORIES = [
   "childrens_health",
   "vegan_health",
   "natural_soap",
+  "oral_care",
+  "medicines",
   "other",
 ] as const;
 
 export type ProductCategory = (typeof PRODUCT_CATEGORIES)[number];
 
 export const CATEGORY_LABELS: Record<ProductCategory, string> = {
-  beauty_skincare: "美妝護膚",
+  beauty_skincare: "美妚護膚",
   adult_health: "成人保健",
   childrens_health: "兒童保健",
   vegan_health: "純素保健",
   natural_soap: "天然香皂",
+  oral_care: "口腔保健",
+  medicines: "藥品",
   other: "其他",
 };
 

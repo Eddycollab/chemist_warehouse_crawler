@@ -37,11 +37,13 @@ import { CATEGORY_LABELS } from "../lib/categoryLabels";
 
 const CATEGORIES = [
   { value: "all", label: "全部品類" },
-  { value: "beauty_skincare", label: "美妝護膚" },
+  { value: "beauty_skincare", label: "美妚護膚" },
   { value: "adult_health", label: "成人保健" },
   { value: "childrens_health", label: "兒童保健" },
   { value: "vegan_health", label: "純素保健" },
   { value: "natural_soap", label: "天然香皂" },
+  { value: "oral_care", label: "口腔保健" },
+  { value: "medicines", label: "藥品" },
   { value: "other", label: "其他" },
 ];
 
@@ -162,7 +164,7 @@ export default function Products() {
   const [showExcelImport, setShowExcelImport] = useState(false);
 
   const { data: products, isLoading, refetch } = trpc.product.list.useQuery({
-    category: category !== "all" ? (category as "beauty_skincare" | "adult_health" | "childrens_health" | "vegan_health" | "natural_soap" | "other") : undefined,
+    category: category !== "all" ? (category as "beauty_skincare" | "adult_health" | "childrens_health" | "vegan_health" | "natural_soap" | "oral_care" | "medicines" | "other") : undefined,
     isOnSale: showSaleOnly ? true : undefined,
     search: search || undefined,
   });
