@@ -166,3 +166,11 @@
 ## 修復 Railway 生產環境 migration 問題
 - [x] 確認 server startup 時自動執行 news 相關表格的 migration
 - [x] 更新 checkpoint 並推送到 Railway 觸發重新部署
+
+## 修復新聞爬蟲重複啟動和卡住問題
+- [x] 後端：加入全域 isNewsCrawlRunning 旗標，防止同一來源重複啟動
+- [x] 後端：修復 newsCrawler.ts 確保 finally 區塊一定釋放鎖，防止永遠卡住
+- [x] 後端：加入 resetStuckNewsCrawlJobs 函式 + news.resetStuck mutation
+- [x] 前端： NewsCrawler.tsx 啟動按鈕加入 disabled 狀態防止重複點擊
+- [x] 前端：加入「重置卡住任務」按鈕（有執行中任務時顯示）
+- [x] 儲存 checkpoint 並推送

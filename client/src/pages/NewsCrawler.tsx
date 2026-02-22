@@ -57,9 +57,21 @@ export default function NewsCrawler() {
   const crawlMutation = trpc.news.startCrawl.useMutation({
     onSuccess: (data) => {
       utils.news.getJobs.invalidate();
-      toast.success(data.message);
+      if (data.success) {
+        toast.success(data.message);
+      } else {
+        toast.warning(data.message);
+      }
     },
     onError: (e) => toast.error("啟動失敗：" + e.message),
+  });
+
+  const resetStuckMutation = trpc.news.resetStuck.useMutation({
+    onSuccess: () => {
+      utils.news.getJobs.invalidate();
+      toast.success("已重置卡住的任務狀態");
+    },
+    onError: (e) => toast.error("重置失敗：" + e.message),
   });
 
   const deleteJobMutation = trpc.news.deleteJob.useMutation({
@@ -120,9 +132,21 @@ export default function NewsCrawler() {
 
       {/* Running indicator */}
       {runningJobs.length > 0 && (
-        <div className="flex items-center gap-2 bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 text-sm">
-          <Activity className="w-4 h-4 text-primary animate-pulse" />
-          <span>目前有 <strong>{runningJobs.length}</strong> 個爬取任務正在執行中，每 5 秒自動更新狀態</span>
+        <div className="flex items-center justify-between gap-2 bg-primary/10 border border-primary/30 rounded-lg px-4 py-3 text-sm">
+          <div className="flex items-center gap-2">
+            <Activity className="w-4 h-4 text-primary animate-pulse" />
+            <span>目前有 <strong>{runningJobs.length}</strong> 個爬取任務正在執行中，每 5 秒自動更新狀態</span>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            className="text-amber-500 border-amber-500/30 hover:bg-amber-500/10 shrink-0"
+            onClick={() => resetStuckMutation.mutate()}
+            disabled={resetStuckMutation.isPending}
+          >
+            <RefreshCw className="w-3.5 h-3.5 mr-1" />
+            重置卡住任務
+          </Button>
         </div>
       )}
 
@@ -136,18 +160,29 @@ export default function NewsCrawler() {
             <p className="text-sm text-muted-foreground">尚無啟用的新聞來源，請先至「新聞來源管理」設定</p>
           ) : (
             <div className="flex flex-wrap gap-2">
-              {activeSources.map((source) => (
-                <Button
-                  key={source.id}
-                  variant="outline"
-                  size="sm"
-                  onClick={() => crawlMutation.mutate({ sourceId: source.id })}
-                  disabled={crawlMutation.isPending}
-                >
-                  <Play className="w-3.5 h-3.5 mr-1.5" />
-                  {source.name}
-                </Button>
-              ))}
+              {activeSources.map((source) => {
+                const isSourceRunning = typedJobs.some(
+                  (j) => j.sourceId === source.id && (j.status === "running" || j.status === "pending")
+                );
+                return (
+                  <Button
+                    key={source.id}
+                    variant="outline"
+                    size="sm"
+                    onClick={() => crawlMutation.mutate({ sourceId: source.id })}
+                    disabled={crawlMutation.isPending || isSourceRunning}
+                    title={isSourceRunning ? "該來源正在爬取中" : undefined}
+                  >
+                    {isSourceRunning ? (
+                      <Activity className="w-3.5 h-3.5 mr-1.5 animate-pulse text-primary" />
+                    ) : (
+                      <Play className="w-3.5 h-3.5 mr-1.5" />
+                    )}
+                    {source.name}
+                    {isSourceRunning && <span className="ml-1 text-xs text-muted-foreground">(執行中)</span>}
+                  </Button>
+                );
+              })}
             </div>
           )}
         </CardContent>

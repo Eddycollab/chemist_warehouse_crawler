@@ -14,6 +14,14 @@ import type { NewsSource } from "../drizzle/schema";
 
 const LOG_PREFIX = "[NewsCrawler]";
 
+// Track running crawls per source to prevent duplicate runs
+const _runningCrawls = new Set<number>();
+
+export function isNewsCrawlRunning(sourceId?: number): boolean {
+  if (sourceId !== undefined) return _runningCrawls.has(sourceId);
+  return _runningCrawls.size > 0;
+}
+
 function log(...args: unknown[]) {
   console.log(LOG_PREFIX, ...args);
 }
@@ -135,6 +143,13 @@ export async function runNewsCrawl(sourceId: number): Promise<void> {
     return;
   }
 
+  // Prevent duplicate runs for the same source
+  if (_runningCrawls.has(sourceId)) {
+    log(`Source ${sourceId} (${source.name}) is already running, skipping`);
+    return;
+  }
+  _runningCrawls.add(sourceId);
+
   log(`Starting crawl for source: ${source.name} (${source.url})`);
 
   // Create job record
@@ -202,6 +217,9 @@ export async function runNewsCrawl(sourceId: number): Promise<void> {
       errorMessage: msg,
       completedAt: new Date(),
     });
+  } finally {
+    // Always release the lock
+    _runningCrawls.delete(sourceId);
   }
 }
 

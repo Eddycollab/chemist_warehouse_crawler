@@ -45,9 +45,10 @@ import {
   getNewsCrawlJobs,
   deleteNewsCrawlJob,
   deleteAllNewsCrawlJobs,
+  resetStuckNewsCrawlJobs,
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
-import { runNewsCrawl } from "./newsCrawler";
+import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
 import * as XLSX from "xlsx";
 import { getSchedulerStatus } from "./scheduler";
 import { PRODUCT_CATEGORIES } from "../drizzle/schema";
@@ -623,13 +624,26 @@ const newsRouter = router({
   getJobs: publicProcedure.query(async () => {
     return getNewsCrawlJobs(30);
   }),
+  isRunning: publicProcedure
+    .input(z.object({ sourceId: z.number().optional() }).optional())
+    .query(async ({ input }) => {
+      return { running: isNewsCrawlRunning(input?.sourceId) };
+    }),
   startCrawl: publicProcedure
     .input(z.object({ sourceId: z.number() }))
     .mutation(async ({ input }) => {
+      // Prevent duplicate runs
+      if (isNewsCrawlRunning(input.sourceId)) {
+        return { success: false, message: "該來源正在爬取中，請稍候" };
+      }
       // Run in background
       runNewsCrawl(input.sourceId).catch(console.error);
       return { success: true, message: "爬取任務已啟動，請稍後查看結果" };
     }),
+  resetStuck: publicProcedure.mutation(async () => {
+    await resetStuckNewsCrawlJobs();
+    return { success: true };
+  }),
   deleteJob: publicProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
