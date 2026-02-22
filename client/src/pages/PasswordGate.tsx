@@ -70,10 +70,10 @@ export default function PasswordGate() {
               </div>
               <div className="text-center">
                 <h1 className="text-xl font-bold tracking-tight text-foreground">
-                  CW 價格追蹤
+                  電商爬蟲資訊站
                 </h1>
                 <p className="text-sm text-muted-foreground mt-1">
-                  Chemist Warehouse 價格監控系統
+                  多平台電商價格監控系統
                 </p>
               </div>
             </div>
@@ -153,7 +153,7 @@ export default function PasswordGate() {
 
         {/* Bottom label */}
         <p className="text-center text-xs text-muted-foreground/40 mt-4">
-          CW Price Tracker · 僅供內部使用
+          電商爬蟲資訊站 · 僅供內部使用
         </p>
       </div>
 

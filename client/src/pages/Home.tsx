@@ -79,7 +79,7 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            Chemist Warehouse 價格追蹤
+            電商爬蟲資訊站
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
             即時監控澳洲藥妝特價商品，掌握最佳購物時機

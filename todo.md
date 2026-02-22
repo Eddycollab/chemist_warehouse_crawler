@@ -199,3 +199,13 @@
 - [x] 後端爬蟲：去除重複產品（以產品 URL 為 key 去重，避免同一產品被抓取兩次）
 - [x] 後端爬蟲：清理價格格式，優先取 <ins> 標籤（WooCommerce 特價），去除 <del>（原價），過濾 NT$ 換算文字
 - [x] 後端 testCrawl：同步修正預覽資料的去重和價格清理邏輯
+
+## 新功能：爬蟲管理支援自訂目標網站觸發
+- [x] 後端 crawler.ts：新增 crawlCustomTarget(targetId) 函式，用 cheerio 抓取多頁產品並存入資料庫（去重、價格清理）
+- [x] 後端 routers.ts：新增 crawl.runCustomTarget mutation（觸發自訂目標爬蟲）
+- [x] 前端 CrawlerManager.tsx：加入「自訂目標網站」爬取區塊，列出所有啟用的目標，可選擇單一目標觸發爬取
+- [x] 前端 CrawlerManager.tsx：顯示自訂目標爬取的任務狀態和結果（爬取數量）
+
+## 修正：系統名稱與錯字
+- [x] 系統名稱全站改為「電商爬蟲資訊站」（DashboardLayout、Home.tsx、PasswordGate.tsx）
+- [x] 修正「美妚護膚」錯字為「美妚護膚」（Products.tsx、CrawlerManager.tsx）

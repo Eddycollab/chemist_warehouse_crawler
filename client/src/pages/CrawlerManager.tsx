@@ -25,7 +25,9 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
+import { useState } from "react";
 import { toast } from "sonner";
+import { Globe } from "lucide-react";
 import { CATEGORY_LABELS } from "../lib/categoryLabels";
 
 function formatDate(date: Date | string | null | undefined): string {
@@ -57,7 +59,7 @@ function getStatusBadge(status: string) {
 
 const CRAWL_CATEGORIES = [
   { value: "all", label: "全部品類" },
-  { value: "beauty_skincare", label: "美妚護膚" },
+  { value: "beauty_skincare", label: "美妝護膚" },
   { value: "adult_health", label: "成人保健" },
   { value: "childrens_health", label: "兒童保健" },
   { value: "vegan_health", label: "純素保健" },
@@ -137,6 +139,22 @@ export default function CrawlerManager() {
       }, 2000);
     },
     onError: () => toast.error("停止爬蟲失敗"),
+  });
+
+  // Custom target crawl
+  const { data: crawlTargets } = trpc.targets.list.useQuery();
+  const activeTargets = (crawlTargets ?? []).filter((t: { isActive: boolean }) => t.isActive);
+  const [runningTargetId, setRunningTargetId] = useState<number | null>(null);
+  const runCustomTarget = trpc.crawl.runCustomTarget.useMutation({
+    onSuccess: (data: { crawledCount: number; newCount: number }) => {
+      toast.success(`爬取完成：更新 ${data.crawledCount - data.newCount} 個，新增 ${data.newCount} 個產品`);
+      setRunningTargetId(null);
+      refetchJobs();
+    },
+    onError: (err: { message: string }) => {
+      toast.error(`爬取失敗：${err.message}`);
+      setRunningTargetId(null);
+    },
   });
 
   return (
@@ -324,6 +342,53 @@ export default function CrawlerManager() {
           )}
         </CardContent>
       </Card>
+
+      {/* Custom Target Crawl */}
+      {activeTargets.length > 0 && (
+        <Card className="bg-card border-border">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Globe className="h-4 w-4 text-primary" />
+              自訂目標網站爬取
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground mb-4">
+              選擇已啟用的自訂目標網站並啟動爬取，產品資料將儲存至資料庫。
+            </p>
+            <div className="space-y-2">
+              {activeTargets.map((target: { id: number; name: string; baseUrl: string; productListSelector?: string | null }) => (
+                <div key={target.id} className="flex items-center justify-between p-3 rounded-lg border border-border bg-secondary/20">
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm font-medium text-foreground truncate">{target.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{target.baseUrl}</p>
+                    {!target.productListSelector && (
+                      <p className="text-xs text-yellow-400 mt-0.5">⚠️ 尚未設定選擇器，請先到「目標網站」設定</p>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-2 border-border hover:border-primary/50 ml-3 shrink-0"
+                    disabled={runningTargetId === target.id || !target.productListSelector}
+                    onClick={() => {
+                      setRunningTargetId(target.id);
+                      runCustomTarget.mutate({ targetId: target.id });
+                    }}
+                  >
+                    {runningTargetId === target.id ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <Play className="h-3.5 w-3.5" />
+                    )}
+                    {runningTargetId === target.id ? "爬取中...請稍候" : "啟動爬取"}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Job History */}
       <Card className="bg-card border-border">

@@ -22,7 +22,9 @@ import {
   createCrawlJob,
   updateCrawlJob,
   getCrawlerSettings,
+  getCrawlTargetById,
 } from "./db";
+import * as cheerio from "cheerio";
 import { notifyOwner } from "./_core/notification";
 import type { Product } from "../drizzle/schema";
 import path from "path";
@@ -757,4 +759,222 @@ export async function runCrawl(options: {
   console.log(`[Crawler] Job ${jobId} completed: ${message}`);
 
   return { jobId, success: crawledCount > 0 || newProductsCount > 0, message };
+}
+
+// ─── Custom Target Crawler ────────────────────────────────────────────────────
+
+/**
+ * Crawl a custom target website using cheerio (no browser needed).
+ * Fetches pages using the target's pagination config, parses products with
+ * the configured CSS selectors, and saves them to the database.
+ */
+export async function crawlCustomTarget(targetId: number): Promise<{
+  jobId: number;
+  success: boolean;
+  message: string;
+  crawledCount: number;
+  newCount: number;
+}> {
+  const target = await getCrawlTargetById(targetId);
+  if (!target) throw new Error("找不到目標網站");
+  if (!target.isActive) throw new Error("目標網站未啟用");
+  if (!target.productListSelector) throw new Error("尚未設定產品容器選擇器");
+
+  const jobResult = await createCrawlJob({
+    jobType: "manual",
+    status: "running",
+    category: "all",
+    startedAt: new Date(),
+  });
+  const jobId = (jobResult as { insertId?: number })?.insertId || 0;
+
+  let crawledCount = 0;
+  let newCount = 0;
+  let failedCount = 0;
+
+  // Helper: extract clean price (handles WooCommerce ins/del structure)
+  function extractCleanPrice($: ReturnType<typeof cheerio.load>, $priceEl: ReturnType<ReturnType<typeof cheerio.load>>): string {
+    const insText = $priceEl.find("ins").first().text().trim();
+    if (insText) {
+      const m = insText.match(/(?:AU\$|\$|USD\$|NZ\$)?[\d,]+\.?\d*/i);
+      return m ? m[0].replace(/,/g, "") : insText.split("\n")[0].trim();
+    }
+    const cloned = $priceEl.clone();
+    cloned.find("del").remove();
+    const remaining = cloned.text().trim();
+    const priceMatch = remaining.match(/(?:AU\$|\$|USD\$|NZ\$)[\d,]+\.?\d*/i);
+    if (priceMatch) return priceMatch[0];
+    return remaining.split("\n")[0].trim();
+  }
+
+  try {
+    const existingProducts = await getAllProducts({ isActive: true });
+    const existingUrls = new Set(existingProducts.map((p) => p.url.toLowerCase()));
+
+    const maxPages = target.maxPages || 10;
+    const paginationParam = target.paginationParam || "page";
+
+    for (let page = 1; page <= maxPages; page++) {
+      const url = page === 1
+        ? target.baseUrl
+        : `${target.baseUrl}${target.baseUrl.includes("?") ? "&" : "?"}${paginationParam}=${page}`;
+
+      try {
+        console.log(`[CustomCrawler] Fetching page ${page}: ${url}`);
+        const res = await fetch(url, {
+          headers: {
+            "User-Agent": randomUserAgent(),
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+          },
+          signal: AbortSignal.timeout(20000),
+        });
+        if (!res.ok) {
+          console.warn(`[CustomCrawler] HTTP ${res.status} on page ${page}`);
+          failedCount++;
+          break;
+        }
+        const html = await res.text();
+        const $ = cheerio.load(html);
+        $("script, style, noscript, iframe").remove();
+
+        const containers = $(target.productListSelector);
+        if (containers.length === 0) {
+          console.log(`[CustomCrawler] No containers found on page ${page}, stopping`);
+          break;
+        }
+
+        let pageProductCount = 0;
+        const seenLinks = new Set<string>();
+
+        containers.each((_i, el) => {
+          const $el = $(el);
+          const name = target.productNameSelector
+            ? $el.find(target.productNameSelector).first().text().trim()
+            : $el.find("h2,h3,h4,.title,.name").first().text().trim();
+
+          const $priceEl = target.productPriceSelector
+            ? $el.find(target.productPriceSelector).first()
+            : $el.find(".price,span[class*=price]").first();
+          const priceText = extractCleanPrice($, $priceEl as ReturnType<ReturnType<typeof cheerio.load>>);
+
+          const linkEl = target.productLinkSelector
+            ? $el.find(target.productLinkSelector).first()
+            : $el.find("a").first();
+          let link = linkEl.attr("href") || "";
+          // Resolve relative URLs
+          if (link && !link.startsWith("http")) {
+            try {
+              link = new URL(link, target.baseUrl).href;
+            } catch { /* ignore */ }
+          }
+
+          if (!name || !link || seenLinks.has(link)) return;
+          seenLinks.add(link);
+
+          const imgEl = target.productImageSelector
+            ? $el.find(target.productImageSelector).first()
+            : $el.find("img").first();
+          const imageUrl = imgEl.attr("src") || imgEl.attr("data-src") || "";
+
+          // Parse original price (for sale detection)
+          let originalPriceText = "";
+          if (target.productOriginalPriceSelector) {
+            originalPriceText = $el.find(target.productOriginalPriceSelector).first().text().trim();
+          } else {
+            // WooCommerce: del tag = original price
+            const delText = $priceEl.find("del").first().text().trim();
+            if (delText) {
+              const m = delText.match(/(?:AU\$|\$|USD\$|NZ\$)?[\d,]+\.?\d*/i);
+              originalPriceText = m ? m[0].replace(/,/g, "") : "";
+            }
+          }
+
+          const currentPrice = parsePrice(priceText);
+          if (!currentPrice) return;
+
+          const originalPrice = parsePrice(originalPriceText);
+          const isOnSale = !!(originalPrice && originalPrice > currentPrice);
+          const discountPercent = isOnSale ? calculateDiscountPercent(originalPrice!, currentPrice) : undefined;
+
+          const normalizedUrl = link.toLowerCase();
+          if (existingUrls.has(normalizedUrl)) {
+            // Update existing product
+            const existing = existingProducts.find((p) => p.url.toLowerCase() === normalizedUrl);
+            if (existing) {
+              updateProduct(existing.id, {
+                currentPrice: String(currentPrice),
+                originalPrice: originalPrice ? String(originalPrice) : undefined,
+                isOnSale,
+                discountPercent: discountPercent ? String(discountPercent) : undefined,
+                imageUrl: imageUrl || existing.imageUrl,
+                lastCrawledAt: new Date(),
+              }).catch(console.error);
+              addPriceHistory({
+                productId: existing.id,
+                price: String(currentPrice),
+                originalPrice: originalPrice ? String(originalPrice) : undefined,
+                isOnSale,
+                discountPercent: discountPercent ? String(discountPercent) : undefined,
+                crawledAt: new Date(),
+              }).catch(console.error);
+              crawledCount++;
+              pageProductCount++;
+            }
+          } else {
+            // Create new product
+            createProduct({
+              name,
+              brand: null,
+              sku: null,
+              url: link,
+              imageUrl: imageUrl || null,
+              category: "other",
+              currentPrice: String(currentPrice),
+              originalPrice: originalPrice ? String(originalPrice) : null,
+              isOnSale,
+              discountPercent: discountPercent ? String(discountPercent) : null,
+              isActive: true,
+              lastCrawledAt: new Date(),
+            }).catch(console.error);
+            existingUrls.add(normalizedUrl);
+            newCount++;
+            crawledCount++;
+            pageProductCount++;
+          }
+        });
+
+        console.log(`[CustomCrawler] Page ${page}: found ${pageProductCount} products`);
+
+        if (pageProductCount === 0) break;
+
+        // Random delay between pages
+        await sleep(1000, 2500);
+      } catch (err) {
+        console.error(`[CustomCrawler] Error on page ${page}:`, err);
+        failedCount++;
+        break;
+      }
+    }
+  } catch (err) {
+    console.error("[CustomCrawler] Fatal error:", err);
+    failedCount++;
+  }
+
+  await updateCrawlJob(jobId, {
+    status: failedCount > 0 && crawledCount === 0 ? "failed" : "completed",
+    crawledProducts: crawledCount,
+    failedProducts: failedCount,
+    completedAt: new Date(),
+  });
+
+  if (crawledCount > 0) {
+    notifyOwner({
+      title: `自訂目標爬蟲完成：${target.name}`,
+      content: `已爬取 ${crawledCount} 個產品（新增 ${newCount} 個）。`,
+    }).catch(() => {});
+  }
+
+  const message = `爬取完成：更新 ${crawledCount - newCount} 個，新增 ${newCount} 個，失敗 ${failedCount} 頁`;
+  return { jobId, success: crawledCount > 0, message, crawledCount, newCount };
 }

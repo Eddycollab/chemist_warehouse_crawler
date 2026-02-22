@@ -47,7 +47,7 @@ import {
   deleteAllNewsCrawlJobs,
   resetStuckNewsCrawlJobs,
 } from "./db";
-import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
+import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress, crawlCustomTarget } from "./crawler";
 import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
 import * as cheerio from "cheerio";
 import * as XLSX from "xlsx";
@@ -347,12 +347,17 @@ const crawlRouter = router({
       return { success: true };
     }),
 
-  deleteAllJobs: publicProcedure.mutation(async () => {
+   deleteAllJobs: publicProcedure.mutation(async () => {
     await deleteAllCrawlJobs();
     return { success: true };
   }),
+  runCustomTarget: publicProcedure
+    .input(z.object({ targetId: z.number() }))
+    .mutation(async ({ input }) => {
+      const result = await crawlCustomTarget(input.targetId);
+      return result;
+    }),
 });
-
 // ─── Notification Router ──────────────────────────────────────────────────────
 
 const notificationRouter = router({

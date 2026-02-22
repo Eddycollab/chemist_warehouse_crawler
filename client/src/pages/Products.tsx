@@ -37,7 +37,7 @@ import { CATEGORY_LABELS } from "../lib/categoryLabels";
 
 const CATEGORIES = [
   { value: "all", label: "全部品類" },
-  { value: "beauty_skincare", label: "美妚護膚" },
+  { value: "beauty_skincare", label: "美妝護膚" },
   { value: "adult_health", label: "成人保健" },
   { value: "childrens_health", label: "兒童保健" },
   { value: "vegan_health", label: "純素保健" },
