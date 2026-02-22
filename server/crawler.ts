@@ -443,7 +443,7 @@ export async function runCrawl(options: {
     startedAt: new Date(),
   });
 
-  const jobId = (jobResult as { insertId?: number })?.insertId || 0;
+  const jobId = (Array.isArray(jobResult) ? (jobResult[0] as { insertId?: number })?.insertId : (jobResult as { insertId?: number })?.insertId) || 0;
   _currentJobId = jobId;
   _crawlStopped = false;
 
@@ -636,7 +636,7 @@ export async function crawlCustomTarget(targetId: number): Promise<{
     category: "all",
     startedAt: new Date(),
   });
-  const jobId = (jobResult as { insertId?: number })?.insertId || 0;
+  const jobId = (Array.isArray(jobResult) ? (jobResult[0] as { insertId?: number })?.insertId : (jobResult as { insertId?: number })?.insertId) || 0;
 
   let crawledCount = 0;
   let newCount = 0;

@@ -1,0 +1,18 @@
+{
+  "query": "SHOW COLUMNS FROM crawl_jobs LIKE 'category';",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute SHOW COLUMNS FROM crawl_jobs LIKE 'category';",
+  "rows": [
+    {
+      "Field": "category",
+      "Type": "enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all')",
+      "Null": "YES",
+      "Key": "",
+      "Default": "all",
+      "Extra": ""
+    }
+  ],
+  "messages": [],
+  "stdout": "Field\tType\tNull\tKey\tDefault\tExtra\ncategory\tenum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all')\tYES\t\tall\t\n",
+  "stderr": "",
+  "execution_time_ms": 1640
+}
