@@ -182,3 +182,7 @@
 - [x] 前端：在「目標網站」表單加入「自動偵測」按鈕，點擊後自動填入建議選擇器，並顯示信心度和分析說明
 - [ ] 前端：在「新聞來源」表單加入「自動偵測」按鈕
 - [x] 儲存 checkpoint 並推送
+
+## Bug 修復：新增目標網站表單驗證錯誤
+- [x] 後端 routers.ts：targets.create 和 targets.update 的 zod schema 中，CSS 選擇器欄位改為 z.string().default("")(允許空字串)
+- [x] 確認前端表單提交不再出現 "Too small: expected string to have >=1 characters" 錯誤
