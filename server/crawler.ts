@@ -105,7 +105,7 @@ const CATEGORY_ALGOLIA_FILTERS: Record<string, { label: string; algoliaCategory:
     { label: "Cosmetics", algoliaCategory: "Cosmetics" },
     { label: "Hair Care", algoliaCategory: "Hair Care" },
     { label: "Personal Care", algoliaCategory: "Personal Care" },
-    { label: "Fragrance", algoliaCategory: "Fragrance" },
+    { label: "Fragrances", algoliaCategory: "Fragrances" },
   ],
   adult_health: [
     { label: "Vitamins & Supplements", algoliaCategory: "Vitamins & Supplements" },
