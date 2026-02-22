@@ -352,7 +352,7 @@ export default function CrawlTargets() {
                       ) : (
                         <PlayCircle className="h-3.5 w-3.5" />
                       )}
-                      測試爆取
+                      測試爬取
                     </Button>
                   </div>
                 )}
@@ -368,7 +368,7 @@ export default function CrawlTargets() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <PlayCircle className="h-5 w-5 text-primary" />
-              測試爆取結果
+              測試爬取結果
             </DialogTitle>
             <DialogDescription>
               使用已設定的 CSS 選擇器實際抓取第一頁產品資料
@@ -385,7 +385,7 @@ export default function CrawlTargets() {
               <div className="flex items-start gap-3 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
                 <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-sm font-medium text-red-300">爆取失敗</p>
+                  <p className="text-sm font-medium text-red-300">爬取失敗</p>
                   <p className="text-xs text-red-400/80 mt-1">{testCrawlError}</p>
                   <p className="text-xs text-muted-foreground mt-2">請先點擊「編輯」並使用「自動偵測」填入選擇器，或手動輸入正確的 CSS 選擇器。</p>
                 </div>
@@ -396,7 +396,7 @@ export default function CrawlTargets() {
                 <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/10">
                   <CheckCircle className="h-5 w-5 text-green-400 shrink-0" />
                   <div>
-                    <p className="text-sm font-medium text-green-300">爆取成功</p>
+                    <p className="text-sm font-medium text-green-300">爬取成功</p>
                     <p className="text-xs text-green-400/70">共發現 <strong>{testCrawlResult.totalFound}</strong> 個產品容器，顯示前 {testCrawlResult.products.length} 筆預覽</p>
                   </div>
                 </div>
