@@ -179,7 +179,7 @@ export async function runNewsCrawl(sourceId: number): Promise<void> {
           sourceName: source.name,
           title: article.title,
           url: article.url,
-          publishedAt: article.publishedAt,
+          publishedAt: article.publishedAt ? new Date(article.publishedAt) : null,
           excerpt: article.excerpt,
           imageUrl: article.imageUrl,
         });

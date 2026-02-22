@@ -200,15 +200,16 @@ export type InsertNewsSource = typeof newsSources.$inferInsert;
  */
 export const newsArticles = mysqlTable("news_articles", {
   id: int("id").autoincrement().primaryKey(),
-  sourceId: int("sourceId").notNull(),
-  sourceName: varchar("sourceName", { length: 200 }).notNull(),
-  title: varchar("title", { length: 500 }).notNull(),
+  sourceId: int("sourceId"),
+  sourceName: varchar("sourceName", { length: 200 }),
+  title: varchar("title", { length: 1000 }).notNull(),
   url: text("url").notNull(),
-  publishedAt: varchar("publishedAt", { length: 100 }),
   excerpt: text("excerpt"),
   imageUrl: text("imageUrl"),
-  isRead: boolean("isRead").default(false).notNull(),
+  publishedAt: timestamp("publishedAt"),
   crawledAt: timestamp("crawledAt").defaultNow().notNull(),
+  isRead: boolean("isRead").default(false).notNull(),
+  urlHash: varchar("urlHash", { length: 64 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
