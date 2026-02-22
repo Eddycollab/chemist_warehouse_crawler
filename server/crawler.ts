@@ -584,9 +584,10 @@ export async function runCrawl(options: {
   }
 
   const wasStopped = _crawlStopped;
+  const totalCrawled = crawledCount + newProductsCount;
   await updateCrawlJob(jobId, {
-    status: wasStopped ? "stopped" : (failedCount > 0 && crawledCount === 0 ? "failed" : "completed"),
-    crawledProducts: crawledCount,
+    status: wasStopped ? "stopped" : (failedCount > 0 && totalCrawled === 0 ? "failed" : "completed"),
+    crawledProducts: totalCrawled,
     failedProducts: failedCount,
     completedAt: new Date(),
   });

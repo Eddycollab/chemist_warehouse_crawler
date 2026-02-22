@@ -1,0 +1,28 @@
+{
+  "query": "SHOW CREATE TABLE crawl_jobs;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute SHOW CREATE TABLE crawl_jobs;",
+  "rows": [
+    {
+      "Table": "crawl_jobs",
+      "Create Table": "CREATE TABLE `crawl_jobs` ("
+    }
+  ],
+  "messages": [
+    "  `id` int(11) NOT NULL AUTO_INCREMENT,",
+    "  `jobType` enum('scheduled','manual') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual',",
+    "  `status` enum('pending','running','completed','failed','stopped') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',",
+    "  `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all') COLLATE utf8mb4_unicode_ci DEFAULT 'all',",
+    "  `totalProducts` int(11) DEFAULT '0',",
+    "  `crawledProducts` int(11) DEFAULT '0',",
+    "  `failedProducts` int(11) DEFAULT '0',",
+    "  `errorMessage` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,",
+    "  `startedAt` timestamp NULL DEFAULT NULL,",
+    "  `completedAt` timestamp NULL DEFAULT NULL,",
+    "  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,",
+    "  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */",
+    ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci"
+  ],
+  "stdout": "Table\tCreate Table\ncrawl_jobs\tCREATE TABLE `crawl_jobs` (\n  `id` int(11) NOT NULL AUTO_INCREMENT,\n  `jobType` enum('scheduled','manual') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'manual',\n  `status` enum('pending','running','completed','failed','stopped') COLLATE utf8mb4_unicode_ci NOT NULL DEFAULT 'pending',\n  `category` enum('beauty_skincare','adult_health','childrens_health','vegan_health','natural_soap','oral_care','medicines','other','all') COLLATE utf8mb4_unicode_ci DEFAULT 'all',\n  `totalProducts` int(11) DEFAULT '0',\n  `crawledProducts` int(11) DEFAULT '0',\n  `failedProducts` int(11) DEFAULT '0',\n  `errorMessage` text COLLATE utf8mb4_unicode_ci DEFAULT NULL,\n  `startedAt` timestamp NULL DEFAULT NULL,\n  `completedAt` timestamp NULL DEFAULT NULL,\n  `createdAt` timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,\n  PRIMARY KEY (`id`) /*T![clustered_index] CLUSTERED */\n) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci\n",
+  "stderr": "",
+  "execution_time_ms": 1523
+}
