@@ -93,7 +93,7 @@ export async function notifyOwner(
         "content-type": "application/json",
         "connect-protocol-version": "1",
       },
-      body: JSON.stringify({ title, content }),
+      body: new TextEncoder().encode(JSON.stringify({ title, content })),
     });
 
     if (!response.ok) {
