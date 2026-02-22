@@ -174,3 +174,10 @@
 - [x] 前端： NewsCrawler.tsx 啟動按鈕加入 disabled 狀態防止重複點擊
 - [x] 前端：加入「重置卡住任務」按鈕（有執行中任務時顯示）
 - [x] 儲存 checkpoint 並推送
+
+## 自動偵測選擇器功能（目標網站 + 新聞來源）
+- [x] 後端：新增 crawlTarget.detectSelectors procedure，抓取目標 URL 的 HTML 並用 LLM 分析建議選擇器
+- [x] 後端：安裝 cheerio 套件做 HTML 解析
+- [x] 前端：在「目標網站」表單加入「 AI 自動偵測」按鈕，點擊後自動填入建議選擇器，並顯示信心度和分析說明
+- [ ] 前端：在「新聞來源」表單加入「 AI 自動偵測」按鈕
+- [x] 儲存 checkpoint 並推送

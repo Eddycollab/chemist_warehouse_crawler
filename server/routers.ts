@@ -49,6 +49,8 @@ import {
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
 import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
+import { invokeLLM } from "./_core/llm";
+import * as cheerio from "cheerio";
 import * as XLSX from "xlsx";
 import { getSchedulerStatus } from "./scheduler";
 import { PRODUCT_CATEGORIES } from "../drizzle/schema";
@@ -517,6 +519,94 @@ const targetsRouter = router({
     .mutation(async ({ input }) => {
       await updateCrawlTarget(input.id, { isActive: input.isActive });
       return { success: true };
+    }),
+
+  detectSelectors: publicProcedure
+    .input(z.object({ url: z.string().url() }))
+    .mutation(async ({ input }) => {
+      // 抓取目標網頁 HTML
+      const res = await fetch(input.url, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        },
+        signal: AbortSignal.timeout(15000),
+      });
+      const html = await res.text();
+
+      // 用 cheerio 提取結構摘要（前 8000 字）
+      const $ = cheerio.load(html);
+      // 移除 script/style/svg/head
+      $("script, style, svg, head, noscript, iframe").remove();
+      const bodyHtml = $("body").html() || "";
+      const truncated = bodyHtml.substring(0, 8000);
+
+      // 用 LLM 分析 HTML 結構
+      const llmResult = await invokeLLM({
+        messages: [
+          {
+            role: "system",
+            content: `You are an expert web scraping CSS selector analyst. Analyze the provided HTML and suggest CSS selectors for scraping product data. Return ONLY valid JSON, no markdown, no explanation.`,
+          },
+          {
+            role: "user" as const,
+            content: `Analyze this HTML from ${input.url} and suggest CSS selectors for scraping products/items.
+
+HTML:
+${truncated}
+
+Return JSON with these exact keys (use empty string if not found):
+{
+  "productListSelector": "CSS selector for each product card container",
+  "productNameSelector": "CSS selector for product name (relative to card)",
+  "productPriceSelector": "CSS selector for current price (relative to card)",
+  "productOriginalPriceSelector": "CSS selector for original/crossed-out price (relative to card)",
+  "productLinkSelector": "CSS selector for product link (relative to card)",
+  "productImageSelector": "CSS selector for product image (relative to card)",
+  "paginationParam": "URL parameter or path pattern for pagination (e.g. 'page' or 'page/{page}')",
+  "confidence": "high/medium/low",
+  "notes": "brief explanation of the site structure in Traditional Chinese"
+}`,
+          },
+        ],
+        response_format: {
+          type: "json_schema",
+          json_schema: {
+            name: "selector_result",
+            strict: true,
+            schema: {
+              type: "object",
+              properties: {
+                productListSelector: { type: "string" },
+                productNameSelector: { type: "string" },
+                productPriceSelector: { type: "string" },
+                productOriginalPriceSelector: { type: "string" },
+                productLinkSelector: { type: "string" },
+                productImageSelector: { type: "string" },
+                paginationParam: { type: "string" },
+                confidence: { type: "string" },
+                notes: { type: "string" },
+              },
+              required: ["productListSelector", "productNameSelector", "productPriceSelector", "productOriginalPriceSelector", "productLinkSelector", "productImageSelector", "paginationParam", "confidence", "notes"],
+              additionalProperties: false,
+            },
+          },
+        },
+      });
+
+      const rawContent = llmResult.choices[0]?.message?.content;
+      const content = typeof rawContent === "string" ? rawContent : "{}";
+      return JSON.parse(content) as {
+        productListSelector: string;
+        productNameSelector: string;
+        productPriceSelector: string;
+        productOriginalPriceSelector: string;
+        productLinkSelector: string;
+        productImageSelector: string;
+        paginationParam: string;
+        confidence: string;
+        notes: string;
+      };
     }),
 });
 

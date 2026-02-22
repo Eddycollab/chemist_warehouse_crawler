@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Globe, Info } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Info, Wand2, Loader2, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 
 type TargetForm = {
@@ -141,6 +141,44 @@ export default function CrawlTargets() {
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+
+  const [isDetecting, setIsDetecting] = useState(false);
+  const [detectNotes, setDetectNotes] = useState("");
+  const [detectConfidence, setDetectConfidence] = useState("");
+
+  const detectMutation = trpc.targets.detectSelectors.useMutation({
+    onSuccess: (data) => {
+      setForm((prev) => ({
+        ...prev,
+        productListSelector: data.productListSelector || prev.productListSelector,
+        productNameSelector: data.productNameSelector || prev.productNameSelector,
+        productPriceSelector: data.productPriceSelector || prev.productPriceSelector,
+        productOriginalPriceSelector: data.productOriginalPriceSelector || prev.productOriginalPriceSelector,
+        productLinkSelector: data.productLinkSelector || prev.productLinkSelector,
+        productImageSelector: data.productImageSelector || prev.productImageSelector,
+        paginationParam: data.paginationParam || prev.paginationParam,
+      }));
+      setDetectNotes(data.notes || "");
+      setDetectConfidence(data.confidence || "");
+      setIsDetecting(false);
+      toast.success("選擇器偵測完成！請檢查并調整建議內容");
+    },
+    onError: (e) => {
+      setIsDetecting(false);
+      toast.error("偵測失敗：" + e.message);
+    },
+  });
+
+  function handleDetect() {
+    if (!form.baseUrl) {
+      toast.error("請先填入目標 URL");
+      return;
+    }
+    setIsDetecting(true);
+    setDetectNotes("");
+    setDetectConfidence("");
+    detectMutation.mutate({ url: form.baseUrl });
+  }
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -297,7 +335,38 @@ export default function CrawlTargets() {
             </div>
 
             <div className="border-t pt-4">
-              <p className="text-sm font-medium mb-3">CSS 選擇器設定</p>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-sm font-medium">CSS 選擇器設定</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDetect}
+                  disabled={isDetecting || !form.baseUrl}
+                  className="gap-2 text-purple-600 border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
+                >
+                  {isDetecting ? (
+                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 分析中...</>
+                  ) : (
+                    <><Wand2 className="h-3.5 w-3.5" /> AI 自動偵測</>
+                  )}
+                </Button>
+              </div>
+              {detectNotes && (
+                <div className={`mb-3 p-3 rounded-md text-sm flex gap-2 ${
+                  detectConfidence === "high"
+                    ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
+                    : detectConfidence === "medium"
+                    ? "bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
+                    : "bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
+                }`}>
+                  <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-medium">AI 分析結果（信心度：{detectConfidence === "high" ? "高" : detectConfidence === "medium" ? "中" : "低"}）</span>
+                    <p className="mt-0.5">{detectNotes}</p>
+                  </div>
+                </div>
+              )}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>產品列表容器選擇器 *</Label>
