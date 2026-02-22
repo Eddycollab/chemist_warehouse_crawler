@@ -687,12 +687,40 @@ const targetsRouter = router({
       // 套用產品容器選擇器
       const containers = $(target.productListSelector);
       const products: Array<{ name: string; price: string; link: string; image: string }> = [];
-      containers.slice(0, 10).each((_i: number, el: any) => {
+      const seenLinks = new Set<string>();
+
+      // Helper: extract clean price from a price element (handles WooCommerce ins/del structure)
+      function extractCleanPrice($priceEl: ReturnType<typeof $>): string {
+        // Priority 1: <ins> tag = current sale price (WooCommerce)
+        const insText = $priceEl.find("ins").first().text().trim();
+        if (insText) {
+          // Extract first AU$/$/price pattern
+          const m = insText.match(/(?:AU\$|\$|USD\$|NZ\$)?[\d,]+\.?\d*/i);
+          return m ? m[0].replace(/,/g, "") : insText.split("\n")[0].trim();
+        }
+        // Priority 2: remove <del> (original price) and take remaining text
+        const cloned = $priceEl.clone();
+        cloned.find("del").remove();
+        const remaining = cloned.text().trim();
+        // Take only the first price-like token (AU$X.XX or $X.XX), ignore NT$ etc.
+        const priceMatch = remaining.match(/(?:AU\$|\$|USD\$|NZ\$)[\d,]+\.?\d*/i);
+        if (priceMatch) return priceMatch[0];
+        // Fallback: first line only
+        return remaining.split("\n")[0].trim();
+      }
+
+      containers.each((_i: number, el: any) => {
+        if (products.length >= 10) return false; // stop after 10
         const $el = $(el);
         const name = target.productNameSelector ? $el.find(target.productNameSelector).first().text().trim() : $el.find("h2,h3,h4,.title,.name").first().text().trim();
-        const price = target.productPriceSelector ? $el.find(target.productPriceSelector).first().text().trim() : $el.find(".price,span[class*=price]").first().text().trim();
+        // Price: use helper for clean extraction
+        const $priceEl = target.productPriceSelector ? $el.find(target.productPriceSelector).first() : $el.find(".price,span[class*=price]").first();
+        const price = extractCleanPrice($priceEl);
         const linkEl = target.productLinkSelector ? $el.find(target.productLinkSelector).first() : $el.find("a").first();
         const link = linkEl.attr("href") || "";
+        // Deduplicate by URL
+        if (link && seenLinks.has(link)) return;
+        if (link) seenLinks.add(link);
         const imgEl = target.productImageSelector ? $el.find(target.productImageSelector).first() : $el.find("img").first();
         const image = imgEl.attr("src") || imgEl.attr("data-src") || "";
         if (name || price) {

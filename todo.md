@@ -194,3 +194,8 @@
 
 ## Bug 修復：爬蟲管理頁面排程狀態顯示錯誤- [x] 前端 CrawlerManager.tsx：修正「排程狀態」 badge，區分「排程已啟動（閒置）」和「爬蟲執行中」
 - [x] 前端 CrawlerManager.tsx：爬蟲執行中時顯示黄色 badge，閒置時顯示灰色 secondary badge
+
+## Bug 修復：爬蟲資料品質問題
+- [x] 後端爬蟲：去除重複產品（以產品 URL 為 key 去重，避免同一產品被抓取兩次）
+- [x] 後端爬蟲：清理價格格式，優先取 <ins> 標籤（WooCommerce 特價），去除 <del>（原價），過濾 NT$ 換算文字
+- [x] 後端 testCrawl：同步修正預覽資料的去重和價格清理邏輯
