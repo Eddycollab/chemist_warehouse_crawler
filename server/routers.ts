@@ -282,6 +282,12 @@ const priceHistoryRouter = router({
 // ─── Crawl Router ─────────────────────────────────────────────────────────────
 
 const crawlRouter = router({
+  runCustomTarget: publicProcedure
+    .input(z.object({ targetId: z.number() }))
+    .mutation(async ({ input }) => {
+      const result = await crawlCustomTarget(input.targetId);
+      return result;
+    }),
   jobs: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(20) }).optional())
     .query(async ({ input }) => {
@@ -347,16 +353,10 @@ const crawlRouter = router({
       return { success: true };
     }),
 
-   deleteAllJobs: publicProcedure.mutation(async () => {
+  deleteAllJobs: publicProcedure.mutation(async () => {
     await deleteAllCrawlJobs();
     return { success: true };
   }),
-  runCustomTarget: publicProcedure
-    .input(z.object({ targetId: z.number() }))
-    .mutation(async ({ input }) => {
-      const result = await crawlCustomTarget(input.targetId);
-      return result;
-    }),
 });
 // ─── Notification Router ──────────────────────────────────────────────────────
 

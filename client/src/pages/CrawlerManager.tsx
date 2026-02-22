@@ -145,7 +145,8 @@ export default function CrawlerManager() {
   const { data: crawlTargets } = trpc.targets.list.useQuery();
   const activeTargets = (crawlTargets ?? []).filter((t: { isActive: boolean }) => t.isActive);
   const [runningTargetId, setRunningTargetId] = useState<number | null>(null);
-  const runCustomTarget = trpc.crawl.runCustomTarget.useMutation({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const runCustomTarget = (trpc.crawl as any).runCustomTarget.useMutation({
     onSuccess: (data: { crawledCount: number; newCount: number }) => {
       toast.success(`爬取完成：更新 ${data.crawledCount - data.newCount} 個，新增 ${data.newCount} 個產品`);
       setRunningTargetId(null);
