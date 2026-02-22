@@ -241,8 +241,11 @@ export default function CrawlerManager() {
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">排程狀態</span>
-            <Badge variant={schedulerStatus?.isRunning ? "default" : "secondary"}>
-              {schedulerStatus?.isRunning ? "運行中" : "未啟動"}
+            <Badge
+              variant={isCrawling ? "default" : schedulerStatus?.isRunning ? "secondary" : "outline"}
+              className={isCrawling ? "bg-yellow-500/20 text-yellow-400 border-yellow-500/30" : ""}
+            >
+              {isCrawling ? "爬蟲執行中" : schedulerStatus?.isRunning ? "排程已啟動（閒置）" : "未啟動"}
             </Badge>
           </div>
           {schedulerStatus?.nextRunTime && (

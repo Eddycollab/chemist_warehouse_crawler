@@ -655,12 +655,59 @@ const targetsRouter = router({
         paginationSelector: paginationSelector || "",
         paginationParam,
         confidence,
-        notes: notes.join("；"),
+         notes: notes.join("；"),
         containerCount,
       };
     }),
+  testCrawl: publicProcedure
+    .input(
+      z.object({
+        id: z.number(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // 取得目標設定
+      const targets = await getCrawlTargets();
+      const target = targets.find((t) => t.id === input.id);
+      if (!target) throw new Error("找不到目標網站");
+      if (!target.productListSelector) throw new Error("尚未設定產品容器選擇器，請先使用「自動偵測」或手動填入");
+      // 抓取第一頁
+      const res = await fetch(target.baseUrl, {
+        headers: {
+          "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+          "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
+        },
+        signal: AbortSignal.timeout(20000),
+      });
+      if (!res.ok) throw new Error(`網頁載入失敗：HTTP ${res.status}`);
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      $("script, style, noscript, iframe").remove();
+      // 套用產品容器選擇器
+      const containers = $(target.productListSelector);
+      const products: Array<{ name: string; price: string; link: string; image: string }> = [];
+      containers.slice(0, 10).each((_i: number, el: any) => {
+        const $el = $(el);
+        const name = target.productNameSelector ? $el.find(target.productNameSelector).first().text().trim() : $el.find("h2,h3,h4,.title,.name").first().text().trim();
+        const price = target.productPriceSelector ? $el.find(target.productPriceSelector).first().text().trim() : $el.find(".price,span[class*=price]").first().text().trim();
+        const linkEl = target.productLinkSelector ? $el.find(target.productLinkSelector).first() : $el.find("a").first();
+        const link = linkEl.attr("href") || "";
+        const imgEl = target.productImageSelector ? $el.find(target.productImageSelector).first() : $el.find("img").first();
+        const image = imgEl.attr("src") || imgEl.attr("data-src") || "";
+        if (name || price) {
+          products.push({ name: name || "(無名稱)", price: price || "(無價格)", link, image });
+        }
+      });
+      return {
+        success: true,
+        totalFound: containers.length,
+        products,
+        url: target.baseUrl,
+        selector: target.productListSelector,
+      };
+    }),
 });
-
 // ─── News Router ─────────────────────────────────────────────────────────────
 
 const newsRouter = router({

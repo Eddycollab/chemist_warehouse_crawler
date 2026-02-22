@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Globe, Info, Wand2, CheckCircle, AlertCircle, HelpCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Info, Wand2, CheckCircle, AlertCircle, HelpCircle, PlayCircle, Loader2, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
 type TargetForm = {
@@ -72,6 +72,24 @@ export default function CrawlTargets() {
     notes: string;
     containerCount: number;
   } | null>(null);
+  const [testCrawlOpen, setTestCrawlOpen] = useState(false);
+  const [testCrawlResult, setTestCrawlResult] = useState<{
+    totalFound: number;
+    products: Array<{ name: string; price: string; link: string; image: string }>;
+    url: string;
+    selector: string;
+  } | null>(null);
+  const [testCrawlError, setTestCrawlError] = useState<string | null>(null);
+  const testCrawlMutation = trpc.targets.testCrawl.useMutation({
+    onSuccess: (data) => {
+      setTestCrawlResult(data);
+      setTestCrawlError(null);
+    },
+    onError: (e) => {
+      setTestCrawlError(e.message);
+      setTestCrawlResult(null);
+    },
+  });
 
   const createMutation = trpc.targets.create.useMutation({
     onSuccess: () => {
@@ -315,11 +333,107 @@ export default function CrawlTargets() {
                     </div>
                   )}
                 </div>
+                {target.isActive && (
+                  <div className="mt-3 pt-3 border-t border-border/50">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 text-xs"
+                      disabled={testCrawlMutation.isPending}
+                      onClick={() => {
+                        setTestCrawlResult(null);
+                        setTestCrawlError(null);
+                        setTestCrawlOpen(true);
+                        testCrawlMutation.mutate({ id: target.id });
+                      }}
+                    >
+                      {testCrawlMutation.isPending ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <PlayCircle className="h-3.5 w-3.5" />
+                      )}
+                      測試爆取
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
+
+      {/* Test Crawl Result Dialog */}
+      <Dialog open={testCrawlOpen} onOpenChange={setTestCrawlOpen}>
+        <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PlayCircle className="h-5 w-5 text-primary" />
+              測試爆取結果
+            </DialogTitle>
+            <DialogDescription>
+              使用已設定的 CSS 選擇器實際抓取第一頁產品資料
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            {testCrawlMutation.isPending && (
+              <div className="flex flex-col items-center justify-center py-10 gap-3">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <p className="text-sm text-muted-foreground">正在抓取網頁資料，請稍候...</p>
+              </div>
+            )}
+            {testCrawlError && (
+              <div className="flex items-start gap-3 p-4 rounded-lg border border-red-500/30 bg-red-500/10">
+                <AlertCircle className="h-5 w-5 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-red-300">爆取失敗</p>
+                  <p className="text-xs text-red-400/80 mt-1">{testCrawlError}</p>
+                  <p className="text-xs text-muted-foreground mt-2">請先點擊「編輯」並使用「自動偵測」填入選擇器，或手動輸入正確的 CSS 選擇器。</p>
+                </div>
+              </div>
+            )}
+            {testCrawlResult && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3 p-3 rounded-lg border border-green-500/30 bg-green-500/10">
+                  <CheckCircle className="h-5 w-5 text-green-400 shrink-0" />
+                  <div>
+                    <p className="text-sm font-medium text-green-300">爆取成功</p>
+                    <p className="text-xs text-green-400/70">共發現 <strong>{testCrawlResult.totalFound}</strong> 個產品容器，顯示前 {testCrawlResult.products.length} 筆預覽</p>
+                  </div>
+                </div>
+                {testCrawlResult.products.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    <AlertCircle className="h-8 w-8 mx-auto mb-2 text-yellow-400" />
+                    <p>找到容器但無法解析產品資料，請檢查名稱和價格選擇器是否正確。</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {testCrawlResult.products.map((p, i) => (
+                      <div key={i} className="flex items-start gap-3 p-3 rounded-lg border border-border/50 bg-secondary/20">
+                        {p.image && (
+                          <img src={p.image} alt={p.name} className="w-12 h-12 object-cover rounded shrink-0" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{p.name}</p>
+                          <p className="text-sm text-primary font-semibold">{p.price}</p>
+                          {p.link && (
+                            <a href={p.link.startsWith('http') ? p.link : testCrawlResult.url.replace(/\/[^/]*$/, '') + p.link} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1 mt-0.5">
+                              <ExternalLink className="h-3 w-3" />檢視產品
+                            </a>
+                          )}
+                        </div>
+                        <span className="text-xs text-muted-foreground shrink-0">#{i + 1}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTestCrawlOpen(false)}>關閉</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Create / Edit Dialog */}
       <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setDetectResult(null); }}>

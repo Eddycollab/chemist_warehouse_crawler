@@ -186,3 +186,11 @@
 ## Bug 修復：新增目標網站表單驗證錯誤
 - [x] 後端 routers.ts：targets.create 和 targets.update 的 zod schema 中，CSS 選擇器欄位改為 z.string().default("")(允許空字串)
 - [x] 確認前端表單提交不再出現 "Too small: expected string to have >=1 characters" 錯誤
+
+## 新功能：目標網站測試爬取
+- [x] 後端 routers.ts：新增 targets.testCrawl procedure，用 cheerio 抓取目標 URL 第一頁，套用 CSS 選擇器，回傳前 10 筆產品預覽（名稱、價格、連結、圖片）
+- [x] 前端 CrawlTargets.tsx：每個目標網站卡片加入「測試爆取」按鈕（PlayCircle 圖示）
+- [x] 前端 CrawlTargets.tsx：測試結果顯示 Dialog（產品數量、產品列表預覽、錯誤訊息）
+
+## Bug 修復：爬蟲管理頁面排程狀態顯示錯誤- [x] 前端 CrawlerManager.tsx：修正「排程狀態」 badge，區分「排程已啟動（閒置）」和「爬蟲執行中」
+- [x] 前端 CrawlerManager.tsx：爬蟲執行中時顯示黄色 badge，閒置時顯示灰色 secondary badge
