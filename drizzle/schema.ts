@@ -210,7 +210,6 @@ export const newsArticles = mysqlTable("news_articles", {
   crawledAt: timestamp("crawledAt").defaultNow().notNull(),
   isRead: boolean("isRead").default(false).notNull(),
   urlHash: varchar("urlHash", { length: 64 }),
-  createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
 export type NewsArticle = typeof newsArticles.$inferSelect;
