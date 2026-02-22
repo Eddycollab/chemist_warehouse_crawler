@@ -1,16 +1,15 @@
 /**
  * Chemist Warehouse Price Crawler
  *
- * Uses playwright-extra + stealth plugin to bypass Cloudflare/bot detection.
- * Features: stealth mode, random delays, cookie persistence, random viewport.
+ * Uses Algolia API to fetch product data directly.
+ * Algolia is CW's search/product API (public frontend key).
+ * This approach is much faster and more reliable than browser-based scraping.
  *
- * Fixed issues (2026-02-21):
- * - Updated category URLs to match CW's current URL structure
- * - Fixed pagination parameter: ?page=N (was ?pageNumber=N)
- * - Fixed RRP calculation: "$X.XX Off RRP" → originalPrice = currentPrice + discount
- * - Fixed wait strategy: waitForSelector instead of networkidle
- * - Fixed browser context lifecycle: each subcategory gets its own context
- * - Fixed product name extraction: link.textContent is the product name
+ * Algolia Config (discovered 2026-02-22):
+ *   App ID: 42NP1V2I98
+ *   API Key: 3ce54af79eae81a18144a7aa7ee10ec2
+ *   Index: prod_cwr-cw-au_products_en
+ *   Filter: categoryKeys.en:"<category name>"
  */
 
 import {
@@ -27,8 +26,6 @@ import {
 import * as cheerio from "cheerio";
 import { notifyOwner } from "./_core/notification";
 import type { Product } from "../drizzle/schema";
-import path from "path";
-import fs from "fs";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -44,11 +41,17 @@ export interface CrawledProductData {
   url?: string;
 }
 
+// ─── Algolia Config ───────────────────────────────────────────────────────────
+
+const ALGOLIA_APP_ID = "42NP1V2I98";
+const ALGOLIA_API_KEY = "3ce54af79eae81a18144a7aa7ee10ec2";
+const ALGOLIA_INDEX = "prod_cwr-cw-au_products_en";
+const ALGOLIA_URL = `https://${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries`;
+
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const CRAWL_DELAY_MIN_MS = 1500;
-const CRAWL_DELAY_MAX_MS = 4000;
-const COOKIE_STORE_PATH = path.join(process.cwd(), ".crawl-cookies.json");
+const CRAWL_DELAY_MIN_MS = 500;
+const CRAWL_DELAY_MAX_MS = 1500;
 
 // ─── Crawl Stop Control & Progress ──────────────────────────────────────────
 
@@ -92,41 +95,49 @@ export function getCrawlProgress(): CrawlProgress & { running: boolean } {
   return { ..._crawlProgress, running: _currentJobId !== null };
 }
 
-// ─── Category URL mappings for Chemist Warehouse ─────────────────────────────
-// URL format: https://www.chemistwarehouse.com.au/shop-online/{id}/{slug}?page={n}
-// Verified on 2026-02-21
+// ─── Category Algolia Filter Mappings ────────────────────────────────────────
+// Maps our internal category keys to Algolia categoryKeys.en filter values
+// Verified from CW website navigation 2026-02-22
 
-const CATEGORY_URLS: Record<string, { id: number; slug: string; label: string }[]> = {
+const CATEGORY_ALGOLIA_FILTERS: Record<string, { label: string; algoliaCategory: string }[]> = {
   beauty_skincare: [
-    { id: 665, slug: "skin-care", label: "Skincare" },
-    { id: 648, slug: "cosmetics", label: "Cosmetics" },
-    { id: 129, slug: "hair-care", label: "Hair Care" },
-    { id: 259, slug: "personal-care", label: "Personal Care" },
+    { label: "Skincare", algoliaCategory: "Skincare" },
+    { label: "Cosmetics", algoliaCategory: "Cosmetics" },
+    { label: "Hair Care", algoliaCategory: "Hair Care" },
+    { label: "Personal Care", algoliaCategory: "Personal Care" },
+    { label: "Fragrance", algoliaCategory: "Fragrance" },
   ],
   adult_health: [
-    { id: 81, slug: "vitamins-supplements", label: "Vitamins & Supplements" },
-    { id: 1255, slug: "sports-nutrition", label: "Sport & Fitness" },
+    { label: "Vitamins & Supplements", algoliaCategory: "Vitamins & Supplements" },
+    { label: "Sports Nutrition", algoliaCategory: "Sports Nutrition" },
+    { label: "Weight Management", algoliaCategory: "Weight Management" },
   ],
   childrens_health: [
-    { id: 20, slug: "baby-care", label: "Pregnancy & Baby" },
+    { label: "Baby & Kids", algoliaCategory: "Baby & Kids" },
+    { label: "Pregnancy", algoliaCategory: "Pregnancy" },
   ],
   vegan_health: [
-    { id: 81, slug: "vitamins-supplements", label: "Vitamins & Supplements (Vegan)" },
+    { label: "Vitamins & Supplements", algoliaCategory: "Vitamins & Supplements" },
+    { label: "Natural Health", algoliaCategory: "Natural Health" },
   ],
   natural_soap: [
-    { id: 259, slug: "personal-care", label: "Personal Care (Soaps)" },
+    { label: "Personal Care", algoliaCategory: "Personal Care" },
+    { label: "Natural Health", algoliaCategory: "Natural Health" },
   ],
   oral_care: [
-    { id: 159, slug: "oral-care", label: "Oral Care" },
+    { label: "Oral Care", algoliaCategory: "Oral Care" },
   ],
   medicines: [
-    { id: 258, slug: "medicines", label: "Medicines" },
+    { label: "Cold, Flu & Immunity", algoliaCategory: "Cold, Flu & Immunity" },
+    { label: "Pain Relief", algoliaCategory: "Pain Relief" },
+    { label: "Digestive Health", algoliaCategory: "Digestive Health" },
+    { label: "Allergy", algoliaCategory: "Allergy" },
   ],
 };
 
 // ─── Utility Functions ────────────────────────────────────────────────────────
 
-/** Random delay between min and max ms to mimic human browsing */
+/** Random delay between min and max ms */
 function sleep(min = CRAWL_DELAY_MIN_MS, max = CRAWL_DELAY_MAX_MS): Promise<void> {
   const ms = Math.floor(Math.random() * (max - min + 1)) + min;
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -144,327 +155,202 @@ function calculateDiscountPercent(original: number, current: number): number {
   return Math.round(((original - current) / original) * 10000) / 100;
 }
 
-function extractSkuFromUrl(url: string): string | undefined {
-  const match = url.match(/\/buy\/(\d+)\//);
-  return match ? match[1] : undefined;
-}
-
-/** Random viewport size to avoid fingerprinting */
-function randomViewport() {
-  const viewports = [
-    { width: 1280, height: 800 },
-    { width: 1366, height: 768 },
-    { width: 1440, height: 900 },
-    { width: 1920, height: 1080 },
-    { width: 1536, height: 864 },
-  ];
-  return viewports[Math.floor(Math.random() * viewports.length)];
-}
-
 /** Realistic user agents pool */
 const USER_AGENTS = [
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36",
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
-  "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:132.0) Gecko/20100101 Firefox/132.0",
-  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15",
 ];
 
 function randomUserAgent() {
   return USER_AGENTS[Math.floor(Math.random() * USER_AGENTS.length)];
 }
 
-// ─── Cookie Persistence ───────────────────────────────────────────────────────
+// ─── Algolia API Product Fetcher ──────────────────────────────────────────────
 
-function loadCookies(): object[] {
-  try {
-    if (fs.existsSync(COOKIE_STORE_PATH)) {
-      const data = fs.readFileSync(COOKIE_STORE_PATH, "utf-8");
-      return JSON.parse(data);
-    }
-  } catch {
-    // ignore
-  }
-  return [];
+interface AlgoliaHit {
+  objectID: string;
+  name?: { en?: string } | string;
+  slug?: { en?: string } | string;
+  images?: string[];
+  calculatedPrice?: number;
+  prices?: {
+    AUD?: {
+      priceValues?: Array<{
+        customFields?: {
+          rrp?: { centAmount?: number };
+        };
+      }>;
+    };
+  };
+  attributes?: {
+    "PIMS_percentage_discount"?: number;
+    "cwr-algolia-price"?: number | string;
+    "cwr-brand"?: { label?: { en?: string } };
+    "cwr-product-flags"?: string[];
+    "cwr-epid"?: number;
+    [key: string]: unknown;
+  };
+  sku?: string;
+  productID?: string;
 }
-
-function saveCookies(cookies: object[]): void {
-  try {
-    fs.writeFileSync(COOKIE_STORE_PATH, JSON.stringify(cookies, null, 2));
-  } catch {
-    // ignore
-  }
-}
-
-// ─── Playwright Stealth Browser Manager ──────────────────────────────────────
 
 /**
- * Creates a fresh browser instance for each subcategory scrape.
- * Using a singleton browser caused context-closed errors when one subcategory
- * crashed the context — subsequent subcategories would fail on newPage().
- * By creating a new browser per subcategory, each scrape is fully isolated.
+ * Fetch products from Algolia API for a given category filter.
+ * Returns all products across all pages.
  */
-async function createBrowser(): Promise<import("playwright").Browser> {
-  const { chromium: playwrightChromium } = await import("playwright-extra");
-  const StealthPlugin = (await import("puppeteer-extra-plugin-stealth")).default;
-  playwrightChromium.use(StealthPlugin());
-
-  return playwrightChromium.launch({
-    headless: true,
-    args: [
-      "--no-sandbox",
-      "--disable-setuid-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-accelerated-2d-canvas",
-      "--no-first-run",
-      "--no-zygote",
-      "--single-process",
-      "--disable-gpu",
-      "--disable-blink-features=AutomationControlled",
-      "--disable-features=IsolateOrigins,site-per-process",
-      "--lang=en-AU",
-    ],
-  });
-}
-
-// ─── Category Scraper ─────────────────────────────────────────────────────────
-
-/**
- * Scrapes a single page of a category and returns discovered products.
- * Each call creates its own browser context to avoid context lifecycle issues.
- */
-async function scrapeCategoryPage(
-  categoryId: number,
-  slug: string,
-  maxPages = 3
+async function fetchAlgoliaProducts(
+  algoliaCategory: string,
+  maxPages = 10
 ): Promise<CrawledProductData[]> {
-  // Each subcategory gets its own fresh browser + context for full isolation.
-  // This prevents a crashed context from affecting subsequent subcategories.
-  const browser = await createBrowser();
-  const savedCookies = loadCookies();
+  const results: CrawledProductData[] = [];
+  const hitsPerPage = 100; // max per page
 
-  const context = await browser.newContext({
-    userAgent: randomUserAgent(),
-    locale: "en-AU",
-    timezoneId: "Australia/Sydney",
-    viewport: randomViewport(),
-    extraHTTPHeaders: {
-      "Accept-Language": "en-AU,en;q=0.9",
-      "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
-      "Accept-Encoding": "gzip, deflate, br",
-      "Cache-Control": "no-cache",
-      "Pragma": "no-cache",
-      "Sec-Fetch-Dest": "document",
-      "Sec-Fetch-Mode": "navigate",
-      "Sec-Fetch-Site": "none",
-      "Sec-Fetch-User": "?1",
-      "Upgrade-Insecure-Requests": "1",
-    },
-  });
+  for (let page = 0; page < maxPages; page++) {
+    if (_crawlStopped) break;
 
-  // Restore saved cookies if available
-  if (savedCookies.length > 0) {
+    const filterStr = `categoryKeys.en:"${algoliaCategory}"`;
+    const params = [
+      `hitsPerPage=${hitsPerPage}`,
+      `page=${page}`,
+      `filters=${encodeURIComponent(filterStr)}`,
+      `attributesToRetrieve=objectID,name,slug,images,calculatedPrice,prices,attributes,sku,productID`,
+      `attributesToHighlight=[]`,
+    ].join("&");
+
+    const payload = {
+      requests: [{ indexName: ALGOLIA_INDEX, params }],
+    };
+
+    const queryParams = new URLSearchParams({
+      "x-algolia-agent": "Algolia for JavaScript (4.23.3); Browser (lite)",
+      "x-algolia-api-key": ALGOLIA_API_KEY,
+      "x-algolia-application-id": ALGOLIA_APP_ID,
+    });
+
     try {
-      await context.addCookies(savedCookies as Parameters<typeof context.addCookies>[0]);
-      console.log(`[Crawler] Restored ${savedCookies.length} cookies`);
-    } catch {
-      // ignore invalid cookies
-    }
-  }
-
-  const discoveredProducts: CrawledProductData[] = [];
-
-  try {
-    for (let page = 1; page <= maxPages; page++) {
-      // CW pagination uses ?page=N (not ?pageNumber=N)
-      const url = page === 1
-        ? `https://www.chemistwarehouse.com.au/shop-online/${categoryId}/${slug}`
-        : `https://www.chemistwarehouse.com.au/shop-online/${categoryId}/${slug}?page=${page}`;
-
-      const pageObj = await context.newPage();
-
-      // Override automation detection signals
-      await pageObj.addInitScript(() => {
-        Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-        Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3, 4, 5] });
-        Object.defineProperty(navigator, "languages", { get: () => ["en-AU", "en"] });
-        // @ts-ignore
-        window.chrome = { runtime: {} };
+      const res = await fetch(`${ALGOLIA_URL}?${queryParams}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Origin": "https://www.chemistwarehouse.com.au",
+          "Referer": "https://www.chemistwarehouse.com.au/",
+          "User-Agent": randomUserAgent(),
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(30000),
       });
 
-      try {
-        console.log(`[Crawler] Scraping: ${url}`);
-
-        // Navigate and wait for DOM content (faster than networkidle)
-        await pageObj.goto(url, { waitUntil: "domcontentloaded", timeout: 45000 });
-
-        // Accept cookie banner if present (non-blocking)
-        await pageObj.click('#onetrust-accept-btn-handler').catch(() => {});
-
-        // Wait for product links to appear - this is the key selector
-        // CW renders product cards as <li> elements with <a href="/buy/..."> links
-        const productLinksVisible = await pageObj.waitForSelector(
-          'a[href*="/buy/"]',
-          { timeout: 30000, state: "attached" }
-        ).then(() => true).catch(() => false);
-
-        if (!productLinksVisible) {
-          console.warn(`[Crawler] No product links found on ${url} after 30s wait`);
-          // Log page title to help diagnose
-          const title = await pageObj.title().catch(() => "unknown");
-          console.warn(`[Crawler] Page title: ${title}`);
-          await pageObj.close();
-          break;
-        }
-
-        // Simulate human scrolling to trigger lazy-loaded content
-        await pageObj.evaluate(() => {
-          window.scrollTo({ top: 400, behavior: "smooth" });
-        });
-        await sleep(500, 1000);
-        await pageObj.evaluate(() => {
-          window.scrollTo({ top: 900, behavior: "smooth" });
-        });
-        await sleep(300, 700);
-
-        // Extract products from the page
-        const products = await pageObj.evaluate(() => {
-          const results: Array<{
-            name: string;
-            url: string;
-            price: string;
-            discountAmount: string;
-            imageUrl: string;
-          }> = [];
-
-          // CW product cards: <li> containing <a href="/buy/...">ProductName</a>
-          const productLinks = document.querySelectorAll('a[href*="/buy/"]');
-          const seen = new Set<string>();
-
-          productLinks.forEach((link) => {
-            const href = (link as HTMLAnchorElement).href;
-            if (!href || seen.has(href)) return;
-            seen.add(href);
-
-            // Product name is the link's text content directly
-            const name = link.textContent?.trim() || "";
-            if (!name) return;
-
-            // The product card is the closest <li>
-            const card = link.closest("li");
-            if (!card) return;
-
-            // Current price: <p class="text-colour-title-light headline-xl">$X.XX</p>
-            let price = "";
-            const priceEl = card.querySelector('p.text-colour-title-light.headline-xl');
-            if (priceEl) {
-              price = priceEl.textContent?.trim() || "";
-            }
-            // Fallback: find any <p> starting with $
-            if (!price) {
-              const allPs = Array.from(card.querySelectorAll("p"));
-              const priceP = allPs.find(p => p.textContent?.trim().startsWith("$"));
-              if (priceP) price = priceP.textContent?.trim() || "";
-            }
-
-            if (!price) return;
-
-            // Discount amount: <p class="text-brand-red body-s-emphasis">$X.XX Off RRP</p>
-            // Format: "$X.XX Off RRP" — originalPrice = currentPrice + discountAmount
-            let discountAmount = "";
-            const discountEl = card.querySelector('p.text-brand-red.body-s-emphasis');
-            if (discountEl) {
-              const discountText = discountEl.textContent?.trim() || "";
-              // Match "$X.XX Off RRP" or "$X.XX Off EDLP"
-              const match = discountText.match(/^\$([\d.]+)\s+Off/);
-              if (match) {
-                discountAmount = match[1];
-              }
-            }
-
-            // Product image
-            let imageUrl = "";
-            const img = card.querySelector("img");
-            if (img) {
-              imageUrl = img.src || img.getAttribute("data-src") || "";
-            }
-
-            if (name && href && price) {
-              results.push({ name, url: href, price, discountAmount, imageUrl });
-            }
-          });
-
-          return results;
-        });
-
-        console.log(`[Crawler] Found ${products.length} products on page ${page} of ${slug}`);
-
-        for (const p of products) {
-          const currentPrice = parsePrice(p.price);
-          if (!currentPrice) continue;
-
-          // Calculate original price: currentPrice + discountAmount
-          let origPrice: number | undefined;
-          if (p.discountAmount) {
-            const discount = parseFloat(p.discountAmount);
-            if (!isNaN(discount) && discount > 0) {
-              origPrice = Math.round((currentPrice + discount) * 100) / 100;
-            }
-          }
-
-          const isOnSale = !!(origPrice && origPrice > currentPrice);
-          const discountPercent = isOnSale ? calculateDiscountPercent(origPrice!, currentPrice) : undefined;
-
-          discoveredProducts.push({
-            name: p.name,
-            url: p.url,
-            currentPrice,
-            originalPrice: origPrice,
-            isOnSale,
-            discountPercent,
-            imageUrl: p.imageUrl || undefined,
-            sku: extractSkuFromUrl(p.url),
-          });
-        }
-
-        // Save cookies after successful page load
-        const cookies = await context.cookies();
-        if (cookies.length > 0) {
-          saveCookies(cookies);
-        }
-
-        // Check if there are more pages
-        // CW uses ?page=N format and has a "NEXT" link
-        const hasNextPage = await pageObj.evaluate(() => {
-          // Look for next page link
-          const nextLink = document.querySelector('a[href*="?page="]');
-          const nextBtn = document.querySelector('[aria-label="Go to next page"]');
-          return !!(nextLink || nextBtn);
-        }).catch(() => false);
-
-        await pageObj.close();
-
-        if (!hasNextPage || products.length === 0) {
-          console.log(`[Crawler] No more pages for ${slug} (hasNextPage=${hasNextPage}, products=${products.length})`);
-          break;
-        }
-
-        // Random delay between pages
-        await sleep();
-
-      } catch (err) {
-        console.error(`[Crawler] Error on page ${page} of ${url}:`, err);
-        await pageObj.close().catch(() => {});
+      if (!res.ok) {
+        console.error(`[Algolia] HTTP ${res.status} for category "${algoliaCategory}" page ${page}`);
         break;
       }
+
+      const data = await res.json() as { results?: Array<{ hits?: AlgoliaHit[]; nbHits?: number; nbPages?: number }> };
+      const algoliaResult = data.results?.[0];
+
+      if (!algoliaResult) break;
+
+      const hits = algoliaResult.hits || [];
+      const totalPages = algoliaResult.nbPages || 1;
+
+      console.log(`[Algolia] Category "${algoliaCategory}" page ${page + 1}/${totalPages}: ${hits.length} products (total: ${algoliaResult.nbHits})`);
+
+      for (const hit of hits) {
+        const product = parseAlgoliaHit(hit);
+        if (product) results.push(product);
+      }
+
+      // Stop if we've fetched all pages
+      if (page >= totalPages - 1 || hits.length === 0) break;
+
+      // Small delay between pages
+      await sleep(200, 500);
+
+    } catch (err) {
+      console.error(`[Algolia] Error fetching category "${algoliaCategory}" page ${page}:`, err);
+      break;
     }
-  } finally {
-    // Close context then browser to fully release all resources
-    await context.close().catch(() => {});
-    await browser.close().catch(() => {});
   }
 
-  return discoveredProducts;
+  return results;
+}
+
+/**
+ * Parse a single Algolia hit into CrawledProductData.
+ */
+function parseAlgoliaHit(hit: AlgoliaHit): CrawledProductData | null {
+  // Get product name
+  const nameRaw = hit.name;
+  const name = typeof nameRaw === "object" ? nameRaw?.en : nameRaw;
+  if (!name) return null;
+
+  // Get slug for URL construction
+  const slugRaw = hit.slug;
+  const slug = typeof slugRaw === "object" ? slugRaw?.en : slugRaw;
+
+  // Construct product URL
+  const epid = hit.attributes?.["cwr-epid"];
+  let url: string;
+  if (slug) {
+    url = `https://www.chemistwarehouse.com.au/buy/${slug}`;
+  } else if (epid) {
+    url = `https://www.chemistwarehouse.com.au/buy/${epid}`;
+  } else {
+    return null; // Can't construct URL
+  }
+
+  // Get current price (in cents, divide by 100)
+  const algoliaPrice = hit.attributes?.["cwr-algolia-price"];
+  const calculatedPrice = hit.calculatedPrice;
+  const priceCents = typeof algoliaPrice === "number" ? algoliaPrice
+    : typeof algoliaPrice === "string" ? parseInt(algoliaPrice, 10)
+    : typeof calculatedPrice === "number" ? calculatedPrice
+    : null;
+
+  if (!priceCents || isNaN(priceCents)) return null;
+  const currentPrice = priceCents / 100;
+
+  // Get original price (RRP) from prices object
+  let originalPrice: number | undefined;
+  const rrpCents = hit.prices?.AUD?.priceValues?.[0]?.customFields?.rrp?.centAmount;
+  if (rrpCents && rrpCents > priceCents) {
+    originalPrice = rrpCents / 100;
+  }
+
+  // Get discount percent
+  const discountPct = hit.attributes?.["PIMS_percentage_discount"];
+  let discountPercent: number | undefined;
+  if (discountPct && discountPct > 0) {
+    discountPercent = discountPct;
+    // If no original price from RRP, calculate from discount
+    if (!originalPrice && discountPct < 100) {
+      originalPrice = Math.round((currentPrice / (1 - discountPct / 100)) * 100) / 100;
+    }
+  }
+
+  const isOnSale = !!(originalPrice && originalPrice > currentPrice);
+
+  // Get brand
+  const brand = hit.attributes?.["cwr-brand"]?.label?.en;
+
+  // Get first image
+  const imageUrl = hit.images?.[0] || undefined;
+
+  // Get SKU
+  const sku = hit.sku || (epid ? String(epid) : undefined);
+
+  return {
+    name,
+    brand: brand || undefined,
+    currentPrice,
+    originalPrice,
+    isOnSale,
+    discountPercent,
+    imageUrl,
+    sku,
+    url,
+  };
 }
 
 // ─── Price Change Detection ───────────────────────────────────────────────────
@@ -487,7 +373,7 @@ async function detectAndNotifyPriceChange(
       productId: product.id,
       type: "new_sale",
       title: `${product.name} 開始特價！`,
-      message: `${product.name} 現在特價 $${newPrice}（原價 $${newData.originalPrice ?? oldPrice}），快來搶購！`,
+      message: `${product.name} 現在特價 $${newPrice.toFixed(2)}（原價 $${(newData.originalPrice ?? oldPrice ?? newPrice).toFixed(2)}），快來搶購！`,
       oldPrice: String(oldPrice ?? newData.originalPrice ?? newPrice),
       newPrice: String(newPrice),
       changePercent: String(newData.discountPercent ?? 0),
@@ -497,7 +383,7 @@ async function detectAndNotifyPriceChange(
       productId: product.id,
       type: "sale_ended",
       title: `${product.name} 特價結束`,
-      message: `${product.name} 特價已結束，現在售價 $${newPrice}。`,
+      message: `${product.name} 特價已結束，現在售價 $${newPrice.toFixed(2)}。`,
       oldPrice: String(oldPrice ?? 0),
       newPrice: String(newPrice),
       changePercent: "0",
@@ -558,23 +444,21 @@ export async function runCrawl(options: {
   });
 
   const jobId = (jobResult as { insertId?: number })?.insertId || 0;
-  // Register this job as the active job and reset stop flag
   _currentJobId = jobId;
   _crawlStopped = false;
 
   const isTestMode = options.testMode === true;
 
-  // Determine target categories for progress tracking
-  const targetCategoriesForProgress = options.category && options.category !== "all"
+  // Determine target categories
+  const targetCategories = options.category && options.category !== "all"
     ? [options.category]
-    : Object.keys(CATEGORY_URLS);
+    : Object.keys(CATEGORY_ALGOLIA_FILTERS);
 
-  // Count total sub-categories
-  const totalSubCats = isTestMode ? 1 : targetCategoriesForProgress.reduce(
-    (sum, cat) => sum + (CATEGORY_URLS[cat]?.length || 0), 0
+  // Count total sub-categories for progress
+  const totalSubCats = isTestMode ? 1 : targetCategories.reduce(
+    (sum, cat) => sum + (CATEGORY_ALGOLIA_FILTERS[cat]?.length || 0), 0
   );
 
-  // Initialize progress
   _crawlProgress = {
     currentCategory: null,
     currentCategoryLabel: null,
@@ -588,16 +472,11 @@ export async function runCrawl(options: {
   let newProductsCount = 0;
 
   try {
-    // ── Phase 1: Discover new products from category pages ────────────────────────
-    const shouldDiscover = options.discoverNew !== false; // default true
-    const targetCategories = options.category && options.category !== "all"
-      ? [options.category]
-      : Object.keys(CATEGORY_URLS);
+    const shouldDiscover = options.discoverNew !== false;
 
     if (shouldDiscover) {
-      console.log("[Crawler] Phase 1: Discovering products from categories:", targetCategories);
+      console.log("[Crawler] Phase 1: Discovering products via Algolia API:", targetCategories);
 
-      // Get existing product URLs to avoid duplicates
       const existingProducts = await getAllProducts({ isActive: true });
       const existingUrls = new Set(existingProducts.map((p) => p.url.toLowerCase()));
 
@@ -605,27 +484,20 @@ export async function runCrawl(options: {
 
       outerLoop:
       for (const cat of targetCategories) {
-        if (_crawlStopped) {
-          console.log("[Crawler] Stop flag detected, aborting category loop");
-          break;
-        }
-        const categoryUrls = CATEGORY_URLS[cat] || [];
+        if (_crawlStopped) break;
+        const categoryFilters = CATEGORY_ALGOLIA_FILTERS[cat] || [];
 
-        for (const catInfo of categoryUrls) {
-          if (_crawlStopped) {
-            console.log("[Crawler] Stop flag detected, aborting sub-category loop");
-            break;
-          }
+        for (const catInfo of categoryFilters) {
+          if (_crawlStopped) break;
 
-          // Update progress
           _crawlProgress.currentCategory = cat;
           _crawlProgress.currentCategoryLabel = catInfo.label;
           _crawlProgress.completedCategories = subCatsDone;
 
           try {
-            // testMode: only 1 page, only first sub-category
-            const maxPages = isTestMode ? 1 : 2;
-            const discovered = await scrapeCategoryPage(catInfo.id, catInfo.slug, maxPages);
+            const maxPages = isTestMode ? 1 : 10;
+            console.log(`[Crawler] Fetching Algolia category: ${catInfo.algoliaCategory}`);
+            const discovered = await fetchAlgoliaProducts(catInfo.algoliaCategory, maxPages);
             subCatsDone++;
             _crawlProgress.completedCategories = subCatsDone;
             console.log(`[Crawler] Discovered ${discovered.length} products in ${catInfo.label}`);
@@ -635,7 +507,6 @@ export async function runCrawl(options: {
 
               const normalizedUrl = product.url.toLowerCase();
               if (existingUrls.has(normalizedUrl)) {
-                // Update existing product price
                 const existing = existingProducts.find(
                   (p) => p.url.toLowerCase() === normalizedUrl
                 );
@@ -664,7 +535,6 @@ export async function runCrawl(options: {
                   crawledCount++;
                 }
               } else {
-                // Add new product
                 await createProduct({
                   name: product.name,
                   brand: product.brand || null,
@@ -685,44 +555,23 @@ export async function runCrawl(options: {
               }
             }
 
-            // Random delay between categories
+            // Small delay between categories
             await sleep();
 
-            // testMode: stop after first sub-category
             if (isTestMode) break outerLoop;
           } catch (err) {
-            console.error(`[Crawler] Error scraping category ${catInfo.label}:`, err);
+            console.error(`[Crawler] Error fetching category ${catInfo.label}:`, err);
             failedCount++;
-            // testMode: stop even on error
             if (isTestMode) break outerLoop;
           }
         }
       }
     }
 
-    // ── Phase 2: Update manually-added products ───────────────────────────────
-    const manualProducts = await getAllProducts({
-      category: options.category && options.category !== "all"
-        ? (options.category as "beauty_skincare" | "adult_health" | "childrens_health" | "vegan_health" | "natural_soap" | "other")
-        : undefined,
-      isActive: true,
-    });
-
-    const productsToUpdate = options.productIds
-      ? manualProducts.filter((p) => options.productIds!.includes(p.id))
-      : manualProducts.filter((p) => !p.lastCrawledAt || new Date().getTime() - new Date(p.lastCrawledAt).getTime() > 3600000);
-
-    if (productsToUpdate.length > 0 && !shouldDiscover) {
-      console.log(`[Crawler] Phase 2: Updating ${productsToUpdate.length} existing products`);
-      await updateCrawlJob(jobId, { totalProducts: productsToUpdate.length });
-    }
-
   } catch (error) {
     console.error("[Crawler] Fatal error:", error);
     failedCount++;
   } finally {
-    // Browser lifecycle is managed per-subcategory in scrapeCategoryPage().
-    // Nothing to close here at the job level.
     _currentJobId = null;
     _crawlStopped = false;
     _crawlProgress = {
@@ -862,7 +711,6 @@ export async function crawlCustomTarget(targetId: number): Promise<{
             ? $el.find(target.productLinkSelector).first()
             : $el.find("a").first();
           let link = linkEl.attr("href") || "";
-          // Resolve relative URLs
           if (link && !link.startsWith("http")) {
             try {
               link = new URL(link, target.baseUrl).href;
@@ -877,12 +725,10 @@ export async function crawlCustomTarget(targetId: number): Promise<{
             : $el.find("img").first();
           const imageUrl = imgEl.attr("src") || imgEl.attr("data-src") || "";
 
-          // Parse original price (for sale detection)
           let originalPriceText = "";
           if (target.productOriginalPriceSelector) {
             originalPriceText = $el.find(target.productOriginalPriceSelector).first().text().trim();
           } else {
-            // WooCommerce: del tag = original price
             const delText = $priceEl.find("del").first().text().trim();
             if (delText) {
               const m = delText.match(/(?:AU\$|\$|USD\$|NZ\$)?[\d,]+\.?\d*/i);
@@ -899,7 +745,6 @@ export async function crawlCustomTarget(targetId: number): Promise<{
 
           const normalizedUrl = link.toLowerCase();
           if (existingUrls.has(normalizedUrl)) {
-            // Update existing product
             const existing = existingProducts.find((p) => p.url.toLowerCase() === normalizedUrl);
             if (existing) {
               updateProduct(existing.id, {
@@ -922,7 +767,6 @@ export async function crawlCustomTarget(targetId: number): Promise<{
               pageProductCount++;
             }
           } else {
-            // Create new product
             createProduct({
               name,
               brand: null,
@@ -948,7 +792,6 @@ export async function crawlCustomTarget(targetId: number): Promise<{
 
         if (pageProductCount === 0) break;
 
-        // Random delay between pages
         await sleep(1000, 2500);
       } catch (err) {
         console.error(`[CustomCrawler] Error on page ${page}:`, err);

@@ -209,3 +209,28 @@
 ## 修正：系統名稱與錯字
 - [x] 系統名稱全站改為「電商爬蟲資訊站」（DashboardLayout、Home.tsx、PasswordGate.tsx）
 - [x] 修正「美妚護膚」錯字為「美妚護膚」（Products.tsx、CrawlerManager.tsx）
+
+## 重大改造：Chemist Warehouse 爬蟲改為 Playwright + JSON 攔截
+- [ ] 安裝 playwright 套件（Node.js 版）並安裝 Chromium 瀏覽器
+- [ ] 分析 _next/data JSON 的產品資料結構（name、price、url、image 的 key 路徑）
+- [ ] 改寫 crawler.ts：用 Playwright 載入頁面，攔截 _next/data JSON 回應，解析產品資料
+- [ ] 確保多頁爬取（pagination）正常運作
+- [ ] 測試爬蟲並確認產品資料正確存入資料庫
+
+## 重大改造：Chemist Warehouse 爬蟲改為 Algolia API（2026-02-22）
+- [x] 分析 CW 網站的產品資料來源（使用 Playwright CDP 攔截發現 Algolia API）
+- [x] 確認 Algolia 設定：App ID=42NP1V2I98, API Key=3ce54af79eae81a18144a7aa7ee10ec2, Index=prod_cwr-cw-au_products_en
+- [x] 改寫 crawler.ts：完全移除 Playwright 依賴，改用 Algolia REST API 直接抓取
+- [x] 實作 fetchAlgoliaProducts()：支援分頁（hitsPerPage=100），自動遍歷所有頁面
+- [x] 實作 parseAlgoliaHit()：解析產品名稱、價格（分→元）、原價（RRP）、折扣、圖片、品牌、URL
+- [x] 更新 CATEGORY_ALGOLIA_FILTERS：將內部分類對應到 Algolia categoryKeys.en 過濾器
+- [x] TypeScript 零錯誤，10 個 vitest 測試全數通過
+
+## 重大改造：Chemist Warehouse 爬蟲改為 Algolia API（2026-02-22）
+- [x] 分析 CW 網站的產品資料來源（使用 Playwright CDP 攔截發現 Algolia API）
+- [x] 確認 Algolia 設定：App ID=42NP1V2I98, API Key=3ce54af79eae81a18144a7aa7ee10ec2, Index=prod_cwr-cw-au_products_en
+- [x] 改寫 crawler.ts：完全移除 Playwright 依賴，改用 Algolia REST API 直接抓取
+- [x] 實作 fetchAlgoliaProducts()：支援分頁（hitsPerPage=100），自動遍歷所有頁面
+- [x] 實作 parseAlgoliaHit()：解析產品名稱、價格（分→元）、原價（RRP）、折扣、圖片、品牌、URL
+- [x] 更新 CATEGORY_ALGOLIA_FILTERS：將內部分類對應到 Algolia categoryKeys.en 過濾器
+- [x] TypeScript 零錯誤，10 個 vitest 測試全數通過
