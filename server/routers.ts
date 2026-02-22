@@ -49,7 +49,6 @@ import {
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress } from "./crawler";
 import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
-import { invokeLLM } from "./_core/llm";
 import * as cheerio from "cheerio";
 import * as XLSX from "xlsx";
 import { getSchedulerStatus } from "./scheduler";
@@ -520,92 +519,144 @@ const targetsRouter = router({
       await updateCrawlTarget(input.id, { isActive: input.isActive });
       return { success: true };
     }),
-
   detectSelectors: publicProcedure
     .input(z.object({ url: z.string().url() }))
     .mutation(async ({ input }) => {
-      // 抓取目標網頁 HTML
+      // Fetch the page HTML
       const res = await fetch(input.url, {
         headers: {
           "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
           "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Accept-Language": "zh-TW,zh;q=0.9,en;q=0.8",
         },
         signal: AbortSignal.timeout(15000),
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const html = await res.text();
-
-      // 用 cheerio 提取結構摘要（前 8000 字）
       const $ = cheerio.load(html);
-      // 移除 script/style/svg/head
-      $("script, style, svg, head, noscript, iframe").remove();
-      const bodyHtml = $("body").html() || "";
-      const truncated = bodyHtml.substring(0, 8000);
 
-      // 用 LLM 分析 HTML 結構
-      const llmResult = await invokeLLM({
-        messages: [
-          {
-            role: "system",
-            content: `You are an expert web scraping CSS selector analyst. Analyze the provided HTML and suggest CSS selectors for scraping product data. Return ONLY valid JSON, no markdown, no explanation.`,
-          },
-          {
-            role: "user" as const,
-            content: `Analyze this HTML from ${input.url} and suggest CSS selectors for scraping products/items.
+      // Remove non-content elements
+      $("script, style, noscript, iframe, svg").remove();
 
-HTML:
-${truncated}
+      // --- Rule-based selector detection ---
+      type Candidate = { selector: string; count: number; confidence: "high" | "medium" | "low" };
 
-Return JSON with these exact keys (use empty string if not found):
-{
-  "productListSelector": "CSS selector for each product card container",
-  "productNameSelector": "CSS selector for product name (relative to card)",
-  "productPriceSelector": "CSS selector for current price (relative to card)",
-  "productOriginalPriceSelector": "CSS selector for original/crossed-out price (relative to card)",
-  "productLinkSelector": "CSS selector for product link (relative to card)",
-  "productImageSelector": "CSS selector for product image (relative to card)",
-  "paginationParam": "URL parameter or path pattern for pagination (e.g. 'page' or 'page/{page}')",
-  "confidence": "high/medium/low",
-  "notes": "brief explanation of the site structure in Traditional Chinese"
-}`,
-          },
-        ],
-        response_format: {
-          type: "json_schema",
-          json_schema: {
-            name: "selector_result",
-            strict: true,
-            schema: {
-              type: "object",
-              properties: {
-                productListSelector: { type: "string" },
-                productNameSelector: { type: "string" },
-                productPriceSelector: { type: "string" },
-                productOriginalPriceSelector: { type: "string" },
-                productLinkSelector: { type: "string" },
-                productImageSelector: { type: "string" },
-                paginationParam: { type: "string" },
-                confidence: { type: "string" },
-                notes: { type: "string" },
-              },
-              required: ["productListSelector", "productNameSelector", "productPriceSelector", "productOriginalPriceSelector", "productLinkSelector", "productImageSelector", "paginationParam", "confidence", "notes"],
-              additionalProperties: false,
-            },
-          },
-        },
-      });
+      // Common product container patterns (ordered by specificity)
+      const containerPatterns = [
+        // WooCommerce
+        { sel: "ul.products li.product", label: "WooCommerce product" },
+        { sel: "li.product", label: "WooCommerce product" },
+        { sel: "div.product-small", label: "WooCommerce product-small" },
+        // Shopify
+        { sel: "div.product-item", label: "Shopify product-item" },
+        { sel: "li.grid__item", label: "Shopify grid item" },
+        { sel: "div.card-wrapper", label: "Shopify card" },
+        // Generic
+        { sel: ".product-card", label: "product card" },
+        { sel: ".product-tile", label: "product tile" },
+        { sel: ".product-box", label: "product box" },
+        { sel: ".product-item", label: "product item" },
+        { sel: ".item-product", label: "item product" },
+        { sel: "[class*=\"product-\"]", label: "product-* class" },
+        { sel: "[class*=\"ProductCard\"]", label: "ProductCard" },
+        { sel: "[class*=\"product_item\"]", label: "product_item" },
+        { sel: "[data-product-id]", label: "data-product-id" },
+        { sel: "[data-product]", label: "data-product" },
+      ];
 
-      const rawContent = llmResult.choices[0]?.message?.content;
-      const content = typeof rawContent === "string" ? rawContent : "{}";
-      return JSON.parse(content) as {
-        productListSelector: string;
-        productNameSelector: string;
-        productPriceSelector: string;
-        productOriginalPriceSelector: string;
-        productLinkSelector: string;
-        productImageSelector: string;
-        paginationParam: string;
-        confidence: string;
-        notes: string;
+      let bestContainer = "";
+      let containerCount = 0;
+      let confidence: "high" | "medium" | "low" = "low";
+
+      for (const p of containerPatterns) {
+        const count = $(p.sel).length;
+        if (count >= 3 && count > containerCount) {
+          bestContainer = p.sel;
+          containerCount = count;
+          confidence = count >= 6 ? "high" : "medium";
+        }
+      }
+
+      // If no pattern matched, try to find repeating structures
+      if (!bestContainer) {
+        const candidates: Candidate[] = [];
+        $("ul, ol, div").each((_: number, el: any) => {
+          const children = $(el).children();
+          if (children.length >= 4) {
+            const firstTag = children.first().prop("tagName");
+            const allSame = children.toArray().every((c: any) => $(c).prop("tagName") === firstTag);
+            if (allSame && firstTag) {
+              const cls = $(el).attr("class");
+              if (cls) {
+                const sel = `${firstTag.toLowerCase()}.${cls.trim().split(/\s+/)[0]}`;
+                candidates.push({ selector: sel, count: children.length, confidence: "low" });
+              }
+            }
+          }
+        });
+        if (candidates.length > 0) {
+          candidates.sort((a, b) => b.count - a.count);
+          bestContainer = candidates[0].selector;
+          containerCount = candidates[0].count;
+        }
+      }
+
+      // Detect sub-selectors within the container
+      const detectSubSelector = (parent: any, patterns: string[]): string => {
+        for (const p of patterns) {
+          if (parent.find(p).length > 0) return p;
+        }
+        return "";
+      };
+
+      const firstItem = bestContainer ? $(bestContainer).first() : $("body");
+
+      const namePatterns = [".product-title", ".product-name", ".woocommerce-loop-product__title", ".card-title", "h2.name", "h3.name", ".name", "h2 a", "h3 a", "h4 a", ".title", "[class*=\"title\"]", "[class*=\"name\"]"];
+      const pricePatterns = [".price", ".product-price", ".woocommerce-Price-amount", ".price-wrapper", ".sale-price", "[class*=\"price\"]", "ins .amount", ".amount"];
+      const origPricePatterns = ["del .amount", ".original-price", ".compare-at-price", ".was-price", "del", "[class*=\"original\"]", "[class*=\"compare\"]"];
+      const linkPatterns = ["a[href*=\"/product/\"]", "a[href*=\"/products/\"]", "a[href*=\"/item/\"]", ".woocommerce-LoopProduct-link", "a.product-link", "a"];
+      const imagePatterns = [".attachment-woocommerce_thumbnail", ".wp-post-image", "img.product-image", "img.card-img", "img[src*=\"product\"]", "img"];
+      const paginationPatterns = [".next.page-numbers", "a.next", ".pagination a[rel=\"next\"]", "[class*=\"next\"]", ".page-next a"];
+
+      const nameSelector = detectSubSelector(firstItem, namePatterns);
+      const priceSelector = detectSubSelector(firstItem, pricePatterns);
+      const origPriceSelector = detectSubSelector(firstItem, origPricePatterns);
+      const linkSelector = detectSubSelector(firstItem, linkPatterns);
+      const imageSelector = detectSubSelector(firstItem, imagePatterns);
+      const paginationSelector = detectSubSelector($("body"), paginationPatterns);
+
+      // Detect pagination URL pattern
+      let paginationParam = "page";
+      const nextHref = $(paginationSelector || ".next").attr("href") || "";
+      if (nextHref.includes("/page/")) paginationParam = "path:/page/{page}/";
+      else if (nextHref.includes("?page=")) paginationParam = "page";
+      else if (nextHref.includes("?p=")) paginationParam = "p";
+
+      // Build analysis notes
+      const notes: string[] = [];
+      if (containerCount > 0) notes.push(`找到 ${containerCount} 個產品容器（${bestContainer}）`);
+      if (!bestContainer) notes.push("未找到明確的產品容器，可能需要手動調整選擇器");
+      const isWooCommerce = html.includes("woocommerce") || html.includes("WooCommerce");
+      const isShopify = html.includes("Shopify") || html.includes("/cdn/shop/");
+      if (isWooCommerce) notes.push("偵測到 WooCommerce 架構");
+      if (isShopify) notes.push("偵測到 Shopify 架構");
+      if (html.includes("loading-container") || html.includes("__NEXT_DATA__") || html.includes("window.__nuxt")) {
+        notes.push("⚠️ 此網站可能使用 JavaScript 動態載入，靜態爬蟲可能無法抓取所有產品");
+        confidence = "low";
+      }
+
+      return {
+        productListSelector: bestContainer || ".product",
+        productNameSelector: nameSelector || ".name",
+        productPriceSelector: priceSelector || ".price",
+        productOriginalPriceSelector: origPriceSelector || "",
+        productLinkSelector: linkSelector || "a",
+        productImageSelector: imageSelector || "",
+        paginationSelector: paginationSelector || "",
+        paginationParam,
+        confidence,
+        notes: notes.join("；"),
+        containerCount,
       };
     }),
 });

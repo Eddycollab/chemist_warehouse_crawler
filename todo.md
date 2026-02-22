@@ -176,8 +176,9 @@
 - [x] 儲存 checkpoint 並推送
 
 ## 自動偵測選擇器功能（目標網站 + 新聞來源）
-- [x] 後端：新增 crawlTarget.detectSelectors procedure，抓取目標 URL 的 HTML 並用 LLM 分析建議選擇器
+- [x] 後端：新增 crawlTarget.detectSelectors procedure，抓取目標 URL 的 HTML 並用規則式分析建議選擇器（不依賴 LLM API）
 - [x] 後端：安裝 cheerio 套件做 HTML 解析
-- [x] 前端：在「目標網站」表單加入「 AI 自動偵測」按鈕，點擊後自動填入建議選擇器，並顯示信心度和分析說明
-- [ ] 前端：在「新聞來源」表單加入「 AI 自動偵測」按鈕
+- [x] 後端：修復 merge conflict markers（移除 LLM 版本，保留規則式版本）
+- [x] 前端：在「目標網站」表單加入「自動偵測」按鈕，點擊後自動填入建議選擇器，並顯示信心度和分析說明
+- [ ] 前端：在「新聞來源」表單加入「自動偵測」按鈕
 - [x] 儲存 checkpoint 並推送

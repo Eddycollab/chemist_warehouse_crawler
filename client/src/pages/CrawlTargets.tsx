@@ -25,7 +25,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
-import { Plus, Pencil, Trash2, Globe, Info, Wand2, Loader2, CheckCircle } from "lucide-react";
+import { Plus, Pencil, Trash2, Globe, Info, Wand2, CheckCircle, AlertCircle, HelpCircle } from "lucide-react";
 import { toast } from "sonner";
 
 type TargetForm = {
@@ -67,6 +67,11 @@ export default function CrawlTargets() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [form, setForm] = useState<TargetForm>(defaultForm);
   const [deleteId, setDeleteId] = useState<number | null>(null);
+  const [detectResult, setDetectResult] = useState<{
+    confidence: "high" | "medium" | "low";
+    notes: string;
+    containerCount: number;
+  } | null>(null);
 
   const createMutation = trpc.targets.create.useMutation({
     onSuccess: () => {
@@ -100,14 +105,41 @@ export default function CrawlTargets() {
     onError: (e) => toast.error("操作失敗：" + e.message),
   });
 
+  const detectMutation = trpc.targets.detectSelectors.useMutation({
+    onSuccess: (data) => {
+      setForm((prev) => ({
+        ...prev,
+        productListSelector: data.productListSelector || prev.productListSelector,
+        productNameSelector: data.productNameSelector || prev.productNameSelector,
+        productPriceSelector: data.productPriceSelector || prev.productPriceSelector,
+        productOriginalPriceSelector: data.productOriginalPriceSelector || prev.productOriginalPriceSelector,
+        productLinkSelector: data.productLinkSelector || prev.productLinkSelector,
+        productImageSelector: data.productImageSelector || prev.productImageSelector,
+        paginationParam: data.paginationParam || prev.paginationParam,
+      }));
+      setDetectResult({
+        confidence: data.confidence,
+        notes: data.notes,
+        containerCount: data.containerCount,
+      });
+      const confidenceLabel = data.confidence === "high" ? "高" : data.confidence === "medium" ? "中" : "低";
+      toast.success(`自動偵測完成（信心度：${confidenceLabel}），已填入選擇器`);
+    },
+    onError: (e) => {
+      toast.error("自動偵測失敗：" + e.message);
+    },
+  });
+
   function openCreate() {
     setEditingId(null);
     setForm(defaultForm);
+    setDetectResult(null);
     setDialogOpen(true);
   }
 
   function openEdit(target: typeof targets[0]) {
     setEditingId(target.id);
+    setDetectResult(null);
     setForm({
       name: target.name,
       baseUrl: target.baseUrl,
@@ -123,6 +155,21 @@ export default function CrawlTargets() {
       notes: target.notes ?? "",
     });
     setDialogOpen(true);
+  }
+
+  function handleDetect() {
+    if (!form.baseUrl) {
+      toast.error("請先填入目標 URL");
+      return;
+    }
+    try {
+      new URL(form.baseUrl);
+    } catch {
+      toast.error("URL 格式不正確，請輸入完整網址（含 https://）");
+      return;
+    }
+    setDetectResult(null);
+    detectMutation.mutate({ url: form.baseUrl });
   }
 
   function handleSubmit() {
@@ -141,44 +188,19 @@ export default function CrawlTargets() {
   }
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
+  const isDetecting = detectMutation.isPending;
 
-  const [isDetecting, setIsDetecting] = useState(false);
-  const [detectNotes, setDetectNotes] = useState("");
-  const [detectConfidence, setDetectConfidence] = useState("");
+  const confidenceColor = detectResult?.confidence === "high"
+    ? "text-green-600 dark:text-green-400"
+    : detectResult?.confidence === "medium"
+    ? "text-yellow-600 dark:text-yellow-400"
+    : "text-red-600 dark:text-red-400";
 
-  const detectMutation = trpc.targets.detectSelectors.useMutation({
-    onSuccess: (data) => {
-      setForm((prev) => ({
-        ...prev,
-        productListSelector: data.productListSelector || prev.productListSelector,
-        productNameSelector: data.productNameSelector || prev.productNameSelector,
-        productPriceSelector: data.productPriceSelector || prev.productPriceSelector,
-        productOriginalPriceSelector: data.productOriginalPriceSelector || prev.productOriginalPriceSelector,
-        productLinkSelector: data.productLinkSelector || prev.productLinkSelector,
-        productImageSelector: data.productImageSelector || prev.productImageSelector,
-        paginationParam: data.paginationParam || prev.paginationParam,
-      }));
-      setDetectNotes(data.notes || "");
-      setDetectConfidence(data.confidence || "");
-      setIsDetecting(false);
-      toast.success("選擇器偵測完成！請檢查并調整建議內容");
-    },
-    onError: (e) => {
-      setIsDetecting(false);
-      toast.error("偵測失敗：" + e.message);
-    },
-  });
-
-  function handleDetect() {
-    if (!form.baseUrl) {
-      toast.error("請先填入目標 URL");
-      return;
-    }
-    setIsDetecting(true);
-    setDetectNotes("");
-    setDetectConfidence("");
-    detectMutation.mutate({ url: form.baseUrl });
-  }
+  const ConfidenceIcon = detectResult?.confidence === "high"
+    ? CheckCircle
+    : detectResult?.confidence === "medium"
+    ? HelpCircle
+    : AlertCircle;
 
   return (
     <div className="p-6 space-y-6 max-w-5xl mx-auto">
@@ -203,8 +225,8 @@ export default function CrawlTargets() {
             <Info className="h-5 w-5 text-blue-500 shrink-0 mt-0.5" />
             <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
               <p className="font-medium">如何設定 CSS 選擇器？</p>
-              <p>在目標網站按 F12 開啟開發者工具，找到產品卡片的 HTML 元素，右鍵選「複製 &gt; 複製選擇器」即可取得 CSS 選擇器。</p>
-              <p>例如 Chemist Warehouse 的產品名稱選擇器為 <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">p.body-s.text-colour-title-light</code></p>
+              <p>輸入目標 URL 後，點擊「<Wand2 className="h-3 w-3 inline" /> 自動偵測選擇器」按鈕，系統會自動分析網頁結構並填入建議的選擇器。</p>
+              <p>若自動偵測結果不準確，可在目標網站按 F12 開啟開發者工具，手動複製正確的 CSS 選擇器。</p>
             </div>
           </div>
         </CardContent>
@@ -237,12 +259,7 @@ export default function CrawlTargets() {
                         {target.isActive ? "啟用" : "停用"}
                       </Badge>
                     </div>
-                    <CardDescription className="mt-1 truncate">
-                      <a href={target.baseUrl} target="_blank" rel="noopener noreferrer"
-                        className="hover:underline text-blue-500">
-                        {target.baseUrl}
-                      </a>
-                    </CardDescription>
+                    <CardDescription className="mt-1 truncate">{target.baseUrl}</CardDescription>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Switch
@@ -251,11 +268,11 @@ export default function CrawlTargets() {
                         toggleMutation.mutate({ id: target.id, isActive: checked })
                       }
                     />
-                    <Button variant="outline" size="icon" onClick={() => openEdit(target)}>
+                    <Button variant="ghost" size="icon" onClick={() => openEdit(target)}>
                       <Pencil className="h-4 w-4" />
                     </Button>
                     <Button
-                      variant="outline"
+                      variant="ghost"
                       size="icon"
                       className="text-destructive hover:text-destructive"
                       onClick={() => setDeleteId(target.id)}
@@ -265,35 +282,35 @@ export default function CrawlTargets() {
                   </div>
                 </div>
               </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 text-sm">
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-x-4 gap-y-1 text-xs text-muted-foreground">
                   <div>
-                    <span className="text-muted-foreground">產品列表選擇器：</span>
-                    <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">{target.productListSelector}</code>
+                    <span className="font-medium">產品容器：</span>
+                    <code className="ml-1 text-foreground">{target.productListSelector}</code>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">產品名稱選擇器：</span>
-                    <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">{target.productNameSelector}</code>
+                    <span className="font-medium">名稱：</span>
+                    <code className="ml-1 text-foreground">{target.productNameSelector}</code>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">價格選擇器：</span>
-                    <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">{target.productPriceSelector}</code>
+                    <span className="font-medium">價格：</span>
+                    <code className="ml-1 text-foreground">{target.productPriceSelector}</code>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">連結選擇器：</span>
-                    <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">{target.productLinkSelector}</code>
+                    <span className="font-medium">連結：</span>
+                    <code className="ml-1 text-foreground">{target.productLinkSelector}</code>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">分頁參數：</span>
-                    <code className="ml-1 text-xs bg-muted px-1 py-0.5 rounded">?{target.paginationParam}=N</code>
+                    <span className="font-medium">分頁參數：</span>
+                    <code className="ml-1 text-foreground">{target.paginationParam}</code>
                   </div>
                   <div>
-                    <span className="text-muted-foreground">最大頁數：</span>
-                    <span className="ml-1">{target.maxPages} 頁</span>
+                    <span className="font-medium">最大頁數：</span>
+                    <span className="ml-1 text-foreground">{target.maxPages}</span>
                   </div>
                   {target.notes && (
-                    <div className="md:col-span-2">
-                      <span className="text-muted-foreground">備註：</span>
+                    <div className="md:col-span-3">
+                      <span className="font-medium">備註：</span>
                       <span className="ml-1">{target.notes}</span>
                     </div>
                   )}
@@ -305,7 +322,7 @@ export default function CrawlTargets() {
       )}
 
       {/* Create / Edit Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog open={dialogOpen} onOpenChange={(open) => { setDialogOpen(open); if (!open) setDetectResult(null); }}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>{editingId !== null ? "編輯目標網站" : "新增目標網站"}</DialogTitle>
@@ -326,47 +343,58 @@ export default function CrawlTargets() {
               </div>
               <div className="space-y-2">
                 <Label>目標 URL *</Label>
-                <Input
-                  placeholder="https://www.example.com/products"
-                  value={form.baseUrl}
-                  onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
-                />
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="https://www.example.com/products"
+                    value={form.baseUrl}
+                    onChange={(e) => setForm({ ...form, baseUrl: e.target.value })}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDetect}
+                    disabled={isDetecting || !form.baseUrl}
+                    className="shrink-0 gap-1.5"
+                  >
+                    <Wand2 className="h-3.5 w-3.5" />
+                    {isDetecting ? "偵測中..." : "自動偵測"}
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  輸入 URL 後點擊「自動偵測」，系統會分析網頁結構並自動填入選擇器
+                </p>
               </div>
             </div>
 
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-sm font-medium">CSS 選擇器設定</p>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleDetect}
-                  disabled={isDetecting || !form.baseUrl}
-                  className="gap-2 text-purple-600 border-purple-300 hover:bg-purple-50 dark:hover:bg-purple-950/30"
-                >
-                  {isDetecting ? (
-                    <><Loader2 className="h-3.5 w-3.5 animate-spin" /> AI 分析中...</>
-                  ) : (
-                    <><Wand2 className="h-3.5 w-3.5" /> AI 自動偵測</>
+            {/* Detection result banner */}
+            {detectResult && (
+              <div className={`flex items-start gap-2 p-3 rounded-md border text-sm ${
+                detectResult.confidence === "high"
+                  ? "bg-green-50 border-green-200 dark:bg-green-950/20 dark:border-green-800"
+                  : detectResult.confidence === "medium"
+                  ? "bg-yellow-50 border-yellow-200 dark:bg-yellow-950/20 dark:border-yellow-800"
+                  : "bg-red-50 border-red-200 dark:bg-red-950/20 dark:border-red-800"
+              }`}>
+                <ConfidenceIcon className={`h-4 w-4 shrink-0 mt-0.5 ${confidenceColor}`} />
+                <div className="space-y-0.5">
+                  <p className={`font-medium ${confidenceColor}`}>
+                    偵測信心度：{detectResult.confidence === "high" ? "高" : detectResult.confidence === "medium" ? "中" : "低"}
+                    {detectResult.containerCount > 0 && `（找到 ${detectResult.containerCount} 個產品）`}
+                  </p>
+                  {detectResult.notes && (
+                    <p className="text-muted-foreground">{detectResult.notes}</p>
                   )}
-                </Button>
-              </div>
-              {detectNotes && (
-                <div className={`mb-3 p-3 rounded-md text-sm flex gap-2 ${
-                  detectConfidence === "high"
-                    ? "bg-green-50 dark:bg-green-950/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800"
-                    : detectConfidence === "medium"
-                    ? "bg-yellow-50 dark:bg-yellow-950/20 text-yellow-700 dark:text-yellow-300 border border-yellow-200 dark:border-yellow-800"
-                    : "bg-orange-50 dark:bg-orange-950/20 text-orange-700 dark:text-orange-300 border border-orange-200 dark:border-orange-800"
-                }`}>
-                  <CheckCircle className="h-4 w-4 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-medium">AI 分析結果（信心度：{detectConfidence === "high" ? "高" : detectConfidence === "medium" ? "中" : "低"}）</span>
-                    <p className="mt-0.5">{detectNotes}</p>
-                  </div>
+                  {detectResult.confidence === "low" && (
+                    <p className="text-muted-foreground">建議手動確認選擇器是否正確，或嘗試使用 F12 開發者工具查找正確的 CSS 選擇器。</p>
+                  )}
                 </div>
-              )}
+              </div>
+            )}
+
+            <div className="border-t pt-4">
+              <p className="text-sm font-medium mb-3">CSS 選擇器設定</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>產品列表容器選擇器 *</Label>
