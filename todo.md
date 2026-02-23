@@ -234,3 +234,10 @@
 - [x] 實作 parseAlgoliaHit()：解析產品名稱、價格（分→元）、原價（RRP）、折扣、圖片、品牌、URL
 - [x] 更新 CATEGORY_ALGOLIA_FILTERS：將內部分類對應到 Algolia categoryKeys.en 過濾器
 - [x] TypeScript 零錯誤，10 個 vitest 測試全數通過
+
+## 品牌過濾器功能（2026-02-23）
+- [x] 後端：crawler.ts 加入 brandFilter 參數，在 Algolia API 查詢時加上品牌過濾條件
+- [x] 後端：routers.ts crawl.trigger 加入 brandFilter 參數
+- [x] 後端：新增 crawl.getBrands API，從 Algolia 取得品牌列表（或從 DB 取得已爬取的品牌）
+- [x] 前端：CrawlerManager.tsx 加入品牌過濾器 UI（搜尋輸入框 + 常用品牌快速選擇）
+- [x] 前端：品牌過濾器與分類選擇器整合，觸發爬蟲時帶入品牌參數

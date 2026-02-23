@@ -2,6 +2,7 @@ import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import {
   Bot,
   Play,
@@ -13,6 +14,9 @@ import {
   RefreshCw,
   XCircle,
   Trash2,
+  Tag,
+  Search,
+  X,
 } from "lucide-react";
 import {
   AlertDialog,
@@ -25,7 +29,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { toast } from "sonner";
 import { Globe } from "lucide-react";
 import { CATEGORY_LABELS } from "../lib/categoryLabels";
@@ -68,6 +72,14 @@ const CRAWL_CATEGORIES = [
   { value: "medicines", label: "藥品" },
 ];
 
+// Popular CW brands for quick selection
+const POPULAR_BRANDS = [
+  "Swisse", "Blackmores", "Nature's Way", "Neutrogena", "L'Oreal Paris",
+  "Revlon", "Maybelline", "Garnier", "Pantene", "Head & Shoulders",
+  "Dove", "Nivea", "Cetaphil", "QV", "Ego",
+  "Bioglan", "Naturopathica", "Nutra-Life", "Herbs of Gold", "Fusion Health",
+];
+
 export default function CrawlerManager() {
   const { data: jobs, isLoading: jobsLoading, refetch: refetchJobs } = trpc.crawl.jobs.useQuery({ limit: 20 });
   const { data: schedulerStatus } = trpc.crawl.schedulerStatus.useQuery(undefined, { refetchInterval: 10000 });
@@ -82,8 +94,27 @@ export default function CrawlerManager() {
 
   const isCrawling = runningStatus?.running ?? false;
 
+  // ─── Brand Filter State ───────────────────────────────────────────────────────
+  const [brandInput, setBrandInput] = useState("");
+  const [selectedBrand, setSelectedBrand] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState("all");
+  const [showBrandDropdown, setShowBrandDropdown] = useState(false);
+
+  // Fetch brands from Algolia (debounced via category + query)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const { data: brandsData, isLoading: brandsLoading } = (trpc.crawl as any).getBrands.useQuery(
+    { category: selectedCategory, query: brandInput.length >= 2 ? brandInput : undefined },
+    { enabled: showBrandDropdown }
+  );
+
+  const displayedBrands = useMemo(() => {
+    if (!brandsData?.brands) return [];
+    return brandsData.brands.slice(0, 50);
+  }, [brandsData]);
+
+  // ─── Mutations ────────────────────────────────────────────────────────────────
   const triggerCrawl = trpc.crawl.trigger.useMutation({
-    onSuccess: (data, vars) => {
+    onSuccess: (data) => {
       toast.success(data.message);
       setTimeout(() => {
         refetchJobs();
@@ -106,7 +137,6 @@ export default function CrawlerManager() {
     onError: () => toast.error("重置失敗"),
   });
 
-  // Detect if there are stuck running jobs in DB but no actual running process
   const hasStuckJobs = !isCrawling && jobs?.some((j) => j.status === "running");
 
   const deleteJob = trpc.crawl.deleteJob.useMutation({
@@ -157,6 +187,22 @@ export default function CrawlerManager() {
       setRunningTargetId(null);
     },
   });
+
+  // ─── Trigger helpers ──────────────────────────────────────────────────────────
+  function handleTrigger(category: string, testMode = false) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (triggerCrawl as any).mutate({
+      category,
+      testMode,
+      brandFilter: selectedBrand || undefined,
+    });
+  }
+
+  function clearBrand() {
+    setSelectedBrand("");
+    setBrandInput("");
+    setShowBrandDropdown(false);
+  }
 
   return (
     <div className="space-y-6 p-6">
@@ -287,13 +333,124 @@ export default function CrawlerManager() {
             手動觸發爬蟲
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <p className="text-sm text-muted-foreground mb-4">
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
             選擇要爬取的品類，或一次爬取所有追蹤中的產品。爬蟲任務在背景執行，請稍後查看結果。
           </p>
 
+          {/* ─── Brand Filter ─────────────────────────────────────────────── */}
+          <div className="p-3 rounded-lg border border-primary/20 bg-primary/5 space-y-3">
+            <div className="flex items-center gap-2">
+              <Tag className="h-4 w-4 text-primary" />
+              <span className="text-sm font-medium text-foreground">品牌過濾器</span>
+              <span className="text-xs text-muted-foreground">（選填）只爬取特定品牌的產品</span>
+            </div>
+
+            {/* Selected brand badge */}
+            {selectedBrand && (
+              <div className="flex items-center gap-2">
+                <Badge className="bg-primary/20 text-primary border-primary/30 gap-1 pl-2 pr-1 py-1">
+                  {selectedBrand}
+                  <button
+                    onClick={clearBrand}
+                    className="ml-1 rounded-full hover:bg-primary/30 p-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+                <span className="text-xs text-muted-foreground">已選擇品牌，爬蟲將只抓取此品牌的產品</span>
+              </div>
+            )}
+
+            {/* Brand search input */}
+            <div className="relative">
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="輸入品牌名稱搜尋（如 Swisse、Blackmores）..."
+                    value={brandInput}
+                    onChange={(e) => {
+                      setBrandInput(e.target.value);
+                      setShowBrandDropdown(true);
+                    }}
+                    onFocus={() => setShowBrandDropdown(true)}
+                    className="pl-8 h-8 text-sm bg-background border-border"
+                  />
+                </div>
+                {brandInput && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-muted-foreground hover:text-foreground"
+                    onClick={() => { setBrandInput(""); setShowBrandDropdown(false); }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                )}
+              </div>
+
+              {/* Dropdown */}
+              {showBrandDropdown && (
+                <div className="absolute z-50 top-full mt-1 left-0 right-0 rounded-lg border border-border bg-card shadow-lg max-h-56 overflow-y-auto">
+                  {brandsLoading ? (
+                    <div className="flex items-center justify-center py-4 gap-2 text-muted-foreground text-sm">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      從 Chemist Warehouse 載入品牌...
+                    </div>
+                  ) : displayedBrands.length === 0 ? (
+                    <div className="py-4 text-center text-muted-foreground text-sm">
+                      {brandInput.length >= 2 ? "找不到符合的品牌" : "請輸入至少 2 個字元搜尋"}
+                    </div>
+                  ) : (
+                    <div className="py-1">
+                      {displayedBrands.map((brand: { name: string; count: number }) => (
+                        <button
+                          key={brand.name}
+                          className="w-full flex items-center justify-between px-3 py-2 text-sm hover:bg-secondary/50 text-left transition-colors"
+                          onClick={() => {
+                            setSelectedBrand(brand.name);
+                            setBrandInput(brand.name);
+                            setShowBrandDropdown(false);
+                          }}
+                        >
+                          <span className="text-foreground">{brand.name}</span>
+                          <span className="text-xs text-muted-foreground ml-2">{brand.count.toLocaleString()} 個產品</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Popular brands quick select */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-2">常用品牌快速選擇：</p>
+              <div className="flex flex-wrap gap-1.5">
+                {POPULAR_BRANDS.map((brand: string) => (
+                  <button
+                    key={brand}
+                    onClick={() => {
+                      setSelectedBrand(brand);
+                      setBrandInput(brand);
+                      setShowBrandDropdown(false);
+                    }}
+                    className={`text-xs px-2 py-1 rounded-full border transition-colors ${
+                      selectedBrand === brand
+                        ? "bg-primary/20 border-primary/50 text-primary"
+                        : "border-border text-muted-foreground hover:border-primary/30 hover:text-foreground bg-secondary/20"
+                    }`}
+                  >
+                    {brand}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
           {/* Test Mode */}
-          <div className="mb-4 p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
+          <div className="p-3 rounded-lg border border-blue-500/20 bg-blue-500/5">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-blue-300">✨ 測試模式</p>
@@ -304,7 +461,7 @@ export default function CrawlerManager() {
                 size="sm"
                 className="gap-2 border-blue-500/50 text-blue-400 hover:bg-blue-500/10 hover:text-blue-300 ml-4"
                 disabled={triggerCrawl.isPending || isCrawling}
-                onClick={() => triggerCrawl.mutate({ testMode: true })}
+                onClick={() => handleTrigger("beauty_skincare", true)}
               >
                 {triggerCrawl.isPending ? (
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -316,27 +473,40 @@ export default function CrawlerManager() {
             </div>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            {CRAWL_CATEGORIES.map((cat) => (
-              <Button
-                key={cat.value}
-                variant="outline"
-                size="sm"
-                className="gap-2 border-border hover:border-primary/50"
-                disabled={triggerCrawl.isPending || isCrawling}
-                onClick={() => triggerCrawl.mutate({ category: cat.value })}
-              >
-                {triggerCrawl.isPending ? (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3.5 w-3.5" />
-                )}
-                {cat.label}
-              </Button>
-            ))}
+          {/* Category buttons */}
+          <div>
+            <p className="text-xs text-muted-foreground mb-2">選擇品類觸發爬蟲：</p>
+            <div className="flex flex-wrap gap-2">
+              {CRAWL_CATEGORIES.map((cat) => (
+                <Button
+                  key={cat.value}
+                  variant={selectedCategory === cat.value ? "default" : "outline"}
+                  size="sm"
+                  className={`gap-2 ${
+                    selectedCategory === cat.value
+                      ? "bg-primary/20 border-primary/50 text-primary hover:bg-primary/30"
+                      : "border-border hover:border-primary/50"
+                  }`}
+                  disabled={triggerCrawl.isPending || isCrawling}
+                  onClick={() => {
+                    setSelectedCategory(cat.value);
+                    handleTrigger(cat.value);
+                  }}
+                >
+                  {triggerCrawl.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-3.5 w-3.5" />
+                  )}
+                  {cat.label}
+                  {selectedBrand && <span className="text-xs opacity-70">+ {selectedBrand}</span>}
+                </Button>
+              ))}
+            </div>
           </div>
+
           {isCrawling && (
-            <p className="text-xs text-yellow-400/70 mt-3 flex items-center gap-1">
+            <p className="text-xs text-yellow-400/70 flex items-center gap-1">
               <Loader2 className="h-3 w-3 animate-spin" />
               爬蟲執行中，請先停止後再啟動新任務
             </p>

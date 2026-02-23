@@ -304,6 +304,7 @@ const crawlRouter = router({
         category: z.string().optional(),
         productIds: z.array(z.number()).optional(),
         testMode: z.boolean().optional(),
+        brandFilter: z.string().optional(),
       }).optional()
     )
     .mutation(async ({ input }) => {
@@ -313,11 +314,13 @@ const crawlRouter = router({
         jobType: "manual",
         productIds: input?.productIds,
         testMode: input?.testMode,
+        brandFilter: input?.brandFilter,
       }).catch((err) => console.error("[CrawlRouter] Background crawl error:", err));
 
+      const brandMsg = input?.brandFilter ? `（品牌：${input.brandFilter}）` : "";
       const msg = input?.testMode
-        ? "測試模式已啟動，將爬取第一個品類第 1 頁"
-        : "爬蟲任務已啟動，請稍後查看結果";
+        ? `測試模式已啟動，將爬取第一個品類第 1 頁${brandMsg}`
+        : `爬蟲任務已啟動${brandMsg}，請稍後查看結果`;
       return { success: true, message: msg };
     }),
 
@@ -357,6 +360,92 @@ const crawlRouter = router({
     await deleteAllCrawlJobs();
     return { success: true };
   }),
+
+  getBrands: publicProcedure
+    .input(
+      z.object({
+        category: z.string().optional(),
+        query: z.string().optional(),
+      }).optional()
+    )
+    .query(async ({ input }) => {
+      // Query Algolia for facet values of brand attribute
+      const ALGOLIA_APP_ID = "42NP1V2I98";
+      const ALGOLIA_API_KEY = "3ce54af79eae81a18144a7aa7ee10ec2";
+      const ALGOLIA_INDEX = "prod_cwr-cw-au_products_en";
+      const ALGOLIA_URL = `https://${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries`;
+
+      // Build category filter if provided
+      let filters = "";
+      if (input?.category && input.category !== "all") {
+        // Map internal category to Algolia category
+        const CATEGORY_MAP: Record<string, string[]> = {
+          beauty_skincare: ["Skincare", "Cosmetics", "Hair Care", "Personal Care", "Fragrances"],
+          adult_health: ["Vitamins & Supplements", "Sports Nutrition", "Weight Management"],
+          childrens_health: ["Baby & Kids", "Pregnancy"],
+          vegan_health: ["Vitamins & Supplements", "Natural Health"],
+          natural_soap: ["Personal Care", "Natural Health"],
+          oral_care: ["Oral Care"],
+          medicines: ["Cold, Flu & Immunity", "Pain Relief", "Digestive Health", "Allergy"],
+        };
+        const cats = CATEGORY_MAP[input.category];
+        if (cats && cats.length > 0) {
+          filters = cats.map((c) => `categoryKeys.en:"${c}"`).join(" OR ");
+        }
+      }
+
+      const params = [
+        `hitsPerPage=0`,
+        `facets=${encodeURIComponent("attributes.cwr-brand.label.en")}`,
+        `maxValuesPerFacet=200`,
+        filters ? `filters=${encodeURIComponent(filters)}` : "",
+      ].filter(Boolean).join("&");
+
+      const payload = {
+        requests: [{ indexName: ALGOLIA_INDEX, params }],
+      };
+
+      const queryParams = new URLSearchParams({
+        "x-algolia-agent": "Algolia for JavaScript (4.23.3); Browser (lite)",
+        "x-algolia-api-key": ALGOLIA_API_KEY,
+        "x-algolia-application-id": ALGOLIA_APP_ID,
+      });
+
+      try {
+        const res = await fetch(`${ALGOLIA_URL}?${queryParams}`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Origin": "https://www.chemistwarehouse.com.au",
+            "Referer": "https://www.chemistwarehouse.com.au/",
+          },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(15000),
+        });
+
+        if (!res.ok) throw new Error(`Algolia HTTP ${res.status}`);
+
+        const data = await res.json() as {
+          results?: Array<{
+            facets?: Record<string, Record<string, number>>;
+          }>;
+        };
+
+        const facets = data.results?.[0]?.facets?.["attributes.cwr-brand.label.en"] ?? {};
+        const brands = Object.entries(facets)
+          .map(([name, count]) => ({ name, count }))
+          .sort((a, b) => b.count - a.count);
+
+        // Filter by query if provided
+        const q = input?.query?.toLowerCase();
+        const filtered = q ? brands.filter((b) => b.name.toLowerCase().includes(q)) : brands;
+
+        return { brands: filtered, total: filtered.length };
+      } catch (err) {
+        console.error("[getBrands] Algolia error:", err);
+        return { brands: [], total: 0 };
+      }
+    }),
 });
 // ─── Notification Router ──────────────────────────────────────────────────────
 

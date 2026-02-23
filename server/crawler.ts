@@ -198,10 +198,14 @@ interface AlgoliaHit {
 /**
  * Fetch products from Algolia API for a given category filter.
  * Returns all products across all pages.
+ * @param algoliaCategory - Algolia categoryKeys.en value (e.g. "Skincare")
+ * @param maxPages - Maximum pages to fetch (100 products per page)
+ * @param brandFilter - Optional brand name to filter (e.g. "Swisse")
  */
 async function fetchAlgoliaProducts(
   algoliaCategory: string,
-  maxPages = 10
+  maxPages = 10,
+  brandFilter?: string
 ): Promise<CrawledProductData[]> {
   const results: CrawledProductData[] = [];
   const hitsPerPage = 100; // max per page
@@ -209,7 +213,11 @@ async function fetchAlgoliaProducts(
   for (let page = 0; page < maxPages; page++) {
     if (_crawlStopped) break;
 
-    const filterStr = `categoryKeys.en:"${algoliaCategory}"`;
+    // Build filter string: category + optional brand
+    let filterStr = `categoryKeys.en:"${algoliaCategory}"`;
+    if (brandFilter && brandFilter.trim()) {
+      filterStr += ` AND attributes.cwr-brand.label.en:"${brandFilter.trim()}"`;
+    }
     const params = [
       `hitsPerPage=${hitsPerPage}`,
       `page=${page}`,
@@ -425,6 +433,7 @@ export async function runCrawl(options: {
   productIds?: number[];
   discoverNew?: boolean;
   testMode?: boolean;
+  brandFilter?: string;
 }): Promise<{ jobId: number; success: boolean; message: string }> {
   console.log("[Crawler] Starting crawl job...", options);
 
@@ -496,8 +505,9 @@ export async function runCrawl(options: {
 
           try {
             const maxPages = isTestMode ? 1 : 10;
-            console.log(`[Crawler] Fetching Algolia category: ${catInfo.algoliaCategory}`);
-            const discovered = await fetchAlgoliaProducts(catInfo.algoliaCategory, maxPages);
+            const brandLabel = options.brandFilter ? ` (品牌: ${options.brandFilter})` : "";
+            console.log(`[Crawler] Fetching Algolia category: ${catInfo.algoliaCategory}${brandLabel}`);
+            const discovered = await fetchAlgoliaProducts(catInfo.algoliaCategory, maxPages, options.brandFilter);
             subCatsDone++;
             _crawlProgress.completedCategories = subCatsDone;
             console.log(`[Crawler] Discovered ${discovered.length} products in ${catInfo.label}`);
