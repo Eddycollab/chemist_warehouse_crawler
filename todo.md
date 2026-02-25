@@ -246,3 +246,7 @@
 - [x] 根因：Algolia facets API 預設按字母排序，maxValuesPerFacet=200 只回傳前 200 個（到 "Bi" 開頭），Blackmores 排在第 201+ 位被截斷
 - [x] 修復：改用 Algolia searchForFacetValues API（支援關鍵字搜尋），輸入 2+ 字元時用精確搜尋；無輸入時改用 maxValuesPerFacet=1000 取得更完整列表
 - [x] 修復：前端搜尋邏輯改為「輸入任意字元即觸發 Algolia 搜尋」，不再在前端過濾
+
+## Bug 修復：爬蟲觸發 message channel 提前關閉（2026-02-25）
+- [x] 根因分析：runCustomTarget mutation 直接 await 爬蟲，爬蟲長時間導致 HTTP 連線逾時，message channel 關閉
+- [x] 修復：runCustomTarget 改為非同步觸發（立即回傳 success，背景執行爬蟲），前端更新 toast 訊息

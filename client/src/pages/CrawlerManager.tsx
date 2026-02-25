@@ -178,13 +178,17 @@ export default function CrawlerManager() {
   const [runningTargetId, setRunningTargetId] = useState<number | null>(null);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const runCustomTarget = (trpc.crawl as any).runCustomTarget.useMutation({
-    onSuccess: (data: { crawledCount: number; newCount: number }) => {
-      toast.success(`爬取完成：更新 ${data.crawledCount - data.newCount} 個，新增 ${data.newCount} 個產品`);
-      setRunningTargetId(null);
-      refetchJobs();
+    onSuccess: (data: { success: boolean; message: string }) => {
+      toast.success(data.message || "爬蟲任務已啟動，請稍後查看結果");
+      // Don't clear runningTargetId immediately - let the progress polling handle it
+      // Refresh jobs list after a short delay to show the new job
+      setTimeout(() => {
+        refetchJobs();
+        refetchRunning();
+      }, 1500);
     },
     onError: (err: { message: string }) => {
-      toast.error(`爬取失敗：${err.message}`);
+      toast.error(`啟動失敗：${err.message}`);
       setRunningTargetId(null);
     },
   });

@@ -285,8 +285,12 @@ const crawlRouter = router({
   runCustomTarget: publicProcedure
     .input(z.object({ targetId: z.number() }))
     .mutation(async ({ input }) => {
-      const result = await crawlCustomTarget(input.targetId);
-      return result;
+      // Run crawl in background (don't await) to avoid HTTP connection timeout
+      // which causes "message channel closed before a response was received" error
+      crawlCustomTarget(input.targetId).catch((err) =>
+        console.error("[CrawlRouter] Custom target crawl error:", err)
+      );
+      return { success: true, message: "爬蟲任務已啟動，請稍後查看結果" };
     }),
   jobs: publicProcedure
     .input(z.object({ limit: z.number().min(1).max(100).default(20) }).optional())
