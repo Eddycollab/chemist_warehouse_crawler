@@ -369,16 +369,27 @@ const crawlRouter = router({
       }).optional()
     )
     .query(async ({ input }) => {
-      // Query Algolia for facet values of brand attribute
       const ALGOLIA_APP_ID = "42NP1V2I98";
       const ALGOLIA_API_KEY = "3ce54af79eae81a18144a7aa7ee10ec2";
       const ALGOLIA_INDEX = "prod_cwr-cw-au_products_en";
-      const ALGOLIA_URL = `https://${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net/1/indexes/*/queries`;
+      const ALGOLIA_BASE = `https://${ALGOLIA_APP_ID.toLowerCase()}-dsn.algolia.net`;
+      const FACET_ATTR = "attributes.cwr-brand.label.en";
+
+      const queryParams = new URLSearchParams({
+        "x-algolia-agent": "Algolia for JavaScript (4.23.3); Browser (lite)",
+        "x-algolia-api-key": ALGOLIA_API_KEY,
+        "x-algolia-application-id": ALGOLIA_APP_ID,
+      });
+
+      const commonHeaders = {
+        "Content-Type": "application/json",
+        "Origin": "https://www.chemistwarehouse.com.au",
+        "Referer": "https://www.chemistwarehouse.com.au/",
+      };
 
       // Build category filter if provided
       let filters = "";
       if (input?.category && input.category !== "all") {
-        // Map internal category to Algolia category
         const CATEGORY_MAP: Record<string, string[]> = {
           beauty_skincare: ["Skincare", "Cosmetics", "Hair Care", "Personal Care", "Fragrances"],
           adult_health: ["Vitamins & Supplements", "Sports Nutrition", "Weight Management"],
@@ -394,53 +405,60 @@ const crawlRouter = router({
         }
       }
 
-      const params = [
-        `hitsPerPage=0`,
-        `facets=${encodeURIComponent("attributes.cwr-brand.label.en")}`,
-        `maxValuesPerFacet=200`,
-        filters ? `filters=${encodeURIComponent(filters)}` : "",
-      ].filter(Boolean).join("&");
-
-      const payload = {
-        requests: [{ indexName: ALGOLIA_INDEX, params }],
-      };
-
-      const queryParams = new URLSearchParams({
-        "x-algolia-agent": "Algolia for JavaScript (4.23.3); Browser (lite)",
-        "x-algolia-api-key": ALGOLIA_API_KEY,
-        "x-algolia-application-id": ALGOLIA_APP_ID,
-      });
+      const searchQuery = input?.query?.trim() ?? "";
 
       try {
-        const res = await fetch(`${ALGOLIA_URL}?${queryParams}`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "Origin": "https://www.chemistwarehouse.com.au",
-            "Referer": "https://www.chemistwarehouse.com.au/",
-          },
-          body: JSON.stringify(payload),
-          signal: AbortSignal.timeout(15000),
-        });
+        // ── Strategy A: keyword search ──────────────────────────────────────
+        // When user types a keyword, use searchForFacetValues which does
+        // prefix-match on the facet value itself (not limited by alphabet order).
+        if (searchQuery.length >= 1) {
+          const body: Record<string, unknown> = {
+            facetQuery: searchQuery,
+            maxFacetHits: 50,
+          };
+          if (filters) body.filters = filters;
 
-        if (!res.ok) throw new Error(`Algolia HTTP ${res.status}`);
+          const res = await fetch(
+            `${ALGOLIA_BASE}/1/indexes/${ALGOLIA_INDEX}/facets/${encodeURIComponent(FACET_ATTR)}/query?${queryParams}`,
+            { method: "POST", headers: commonHeaders, body: JSON.stringify(body), signal: AbortSignal.timeout(15000) }
+          );
+          if (!res.ok) throw new Error(`Algolia searchForFacetValues HTTP ${res.status}`);
+
+          const data = await res.json() as { facetHits?: Array<{ value: string; count: number }> };
+          const brands = (data.facetHits ?? []).map((h) => ({ name: h.value, count: h.count }));
+          return { brands, total: brands.length };
+        }
+
+        // ── Strategy B: browse all brands (no keyword) ──────────────────────
+        // Use the multi-index query endpoint with a large maxValuesPerFacet
+        // to get the full brand list sorted by product count.
+        const params = [
+          `hitsPerPage=0`,
+          `facets=${encodeURIComponent(FACET_ATTR)}`,
+          `maxValuesPerFacet=1000`,
+          filters ? `filters=${encodeURIComponent(filters)}` : "",
+        ].filter(Boolean).join("&");
+
+        const res = await fetch(
+          `${ALGOLIA_BASE}/1/indexes/*/queries?${queryParams}`,
+          {
+            method: "POST",
+            headers: commonHeaders,
+            body: JSON.stringify({ requests: [{ indexName: ALGOLIA_INDEX, params }] }),
+            signal: AbortSignal.timeout(15000),
+          }
+        );
+        if (!res.ok) throw new Error(`Algolia facets HTTP ${res.status}`);
 
         const data = await res.json() as {
-          results?: Array<{
-            facets?: Record<string, Record<string, number>>;
-          }>;
+          results?: Array<{ facets?: Record<string, Record<string, number>> }>;
         };
-
-        const facets = data.results?.[0]?.facets?.["attributes.cwr-brand.label.en"] ?? {};
+        const facets = data.results?.[0]?.facets?.[FACET_ATTR] ?? {};
         const brands = Object.entries(facets)
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count);
 
-        // Filter by query if provided
-        const q = input?.query?.toLowerCase();
-        const filtered = q ? brands.filter((b) => b.name.toLowerCase().includes(q)) : brands;
-
-        return { brands: filtered, total: filtered.length };
+        return { brands, total: brands.length };
       } catch (err) {
         console.error("[getBrands] Algolia error:", err);
         return { brands: [], total: 0 };

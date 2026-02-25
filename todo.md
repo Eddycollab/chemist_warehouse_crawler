@@ -241,3 +241,8 @@
 - [x] 後端：新增 crawl.getBrands API，從 Algolia 取得品牌列表（或從 DB 取得已爬取的品牌）
 - [x] 前端：CrawlerManager.tsx 加入品牌過濾器 UI（搜尋輸入框 + 常用品牌快速選擇）
 - [x] 前端：品牌過濾器與分類選擇器整合，觸發爬蟲時帶入品牌參數
+
+## Bug 修復：品牌搜尋找不到 Blackmores（2026-02-25）
+- [x] 根因：Algolia facets API 預設按字母排序，maxValuesPerFacet=200 只回傳前 200 個（到 "Bi" 開頭），Blackmores 排在第 201+ 位被截斷
+- [x] 修復：改用 Algolia searchForFacetValues API（支援關鍵字搜尋），輸入 2+ 字元時用精確搜尋；無輸入時改用 maxValuesPerFacet=1000 取得更完整列表
+- [x] 修復：前端搜尋邏輯改為「輸入任意字元即觸發 Algolia 搜尋」，不再在前端過濾

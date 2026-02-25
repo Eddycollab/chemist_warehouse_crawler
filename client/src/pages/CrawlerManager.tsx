@@ -102,8 +102,9 @@ export default function CrawlerManager() {
 
   // Fetch brands from Algolia (debounced via category + query)
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  // searchForFacetValues supports prefix-match from 1 char; no need for >=2 guard
   const { data: brandsData, isLoading: brandsLoading } = (trpc.crawl as any).getBrands.useQuery(
-    { category: selectedCategory, query: brandInput.length >= 2 ? brandInput : undefined },
+    { category: selectedCategory, query: brandInput.length >= 1 ? brandInput : undefined },
     { enabled: showBrandDropdown }
   );
 
@@ -400,7 +401,7 @@ export default function CrawlerManager() {
                     </div>
                   ) : displayedBrands.length === 0 ? (
                     <div className="py-4 text-center text-muted-foreground text-sm">
-                      {brandInput.length >= 2 ? "找不到符合的品牌" : "請輸入至少 2 個字元搜尋"}
+                      {brandInput.length >= 1 ? "找不到符合的品牌" : "請輸入品牌名稱開始搜尋"}
                     </div>
                   ) : (
                     <div className="py-1">
