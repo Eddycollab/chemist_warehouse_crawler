@@ -250,3 +250,7 @@
 ## Bug 修復：爬蟲觸發 message channel 提前關閉（2026-02-25）
 - [x] 根因分析：runCustomTarget mutation 直接 await 爬蟲，爬蟲長時間導致 HTTP 連線逾時，message channel 關閉
 - [x] 修復：runCustomTarget 改為非同步觸發（立即回傳 success，背景執行爬蟲），前端更新 toast 訊息
+
+## 系統名稱更新（2026-03-26）
+- [x] 全站名稱改為「政府標案資訊網」（DashboardLayout、Home.tsx、PasswordGate.tsx、index.html）
+- [x] 更新 VITE_APP_TITLE 環境變數（需透過 Management UI > Settings > General 手動設定）

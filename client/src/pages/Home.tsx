@@ -79,10 +79,10 @@ export default function Home() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">
-            電商爬蟲資訊站
+            政府標案資訊網
           </h1>
           <p className="text-muted-foreground text-sm mt-1">
-            即時監控澳洲藥妝特價商品，掌握最佳購物時機
+            即時筛選政府標案商機，提升投標成功率
           </p>
         </div>
         <Button

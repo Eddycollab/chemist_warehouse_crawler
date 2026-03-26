@@ -139,7 +139,7 @@ function DashboardLayoutContent({
                 <div className="flex items-center gap-2 min-w-0">
                   <TrendingDown className="h-5 w-5 text-primary shrink-0" />
                   <span className="font-bold tracking-tight truncate text-primary">
-                    電商爬蟲資訊站
+                    政府標案資訊網
                   </span>
                 </div>
               )}
@@ -202,7 +202,7 @@ function DashboardLayoutContent({
               <div className="flex items-center gap-2">
                 <TrendingDown className="h-4 w-4 text-primary" />
                 <span className="font-semibold text-sm text-foreground">
-                  {activeMenuItem?.label ?? "電商爬蟲資訊站"}
+                  {activeMenuItem?.label ?? "政府標案資訊網"}
                 </span>
               </div>
             </div>
