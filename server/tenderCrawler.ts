@@ -13,18 +13,19 @@ const PAGE_SIZE = 50;
 
 interface AcebidxTender {
   id: string;
-  projectNumber?: string;
-  projectName: string;
-  orgId?: string;
-  orgName?: string;
+  project_number?: string;
+  project_name: string;
+  post_title?: string;
+  org_id?: string;
+  org_name?: string;
   budget?: number;
-  catName?: string;
-  typeofTender?: string;
-  typeofAward?: string;
-  isBudgetPublic?: boolean;
-  postDate?: string;
-  submitDeadline?: string;
-  queryDate?: string;
+  cat_name?: string;
+  typeof_tender?: string;
+  typeof_award?: string;
+  is_budget_public?: boolean;
+  post_date?: string;
+  submit_deadline?: string;
+  query_date?: string;
 }
 
 interface AcebidxResponse {
@@ -72,18 +73,19 @@ async function upsertTender(tender: AcebidxTender): Promise<boolean> {
   const row: InsertTender = {
     id: tender.id,
     source: "acebidx",
-    projectNumber: tender.projectNumber ?? null,
-    projectName: tender.projectName,
-    orgId: tender.orgId ?? null,
-    orgName: tender.orgName ?? null,
+    projectNumber: tender.project_number ?? null,
+    projectName: tender.project_name,
+    orgId: tender.org_id ?? null,
+    orgName: tender.org_name ?? null,
     budget: tender.budget ?? null,
-    catName: tender.catName ?? null,
-    typeofTender: tender.typeofTender ?? null,
-    typeofAward: tender.typeofAward ?? null,
-    isBudgetPublic: tender.isBudgetPublic ?? true,
-    postDate: tender.postDate ?? null,
-    submitDeadline: tender.submitDeadline ?? null,
-    queryDate: tender.queryDate ?? null,
+    catName: tender.cat_name ?? null,
+    typeofTender: tender.typeof_tender ?? null,
+    typeofAward: tender.typeof_award ?? null,
+    isBudgetPublic: tender.is_budget_public ?? true,
+    postDate: tender.post_date ?? null,
+    // submit_deadline may include time (e.g. "2026-04-01T17:00:00"), truncate to 30 chars
+    submitDeadline: tender.submit_deadline ? tender.submit_deadline.substring(0, 30) : null,
+    queryDate: tender.query_date ?? null,
   };
 
   await db.insert(tenders).values(row);

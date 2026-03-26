@@ -291,3 +291,7 @@
 - [x] 撰寫 tender.test.ts：11 個測試（tenderCrawler 解析、評分邏輯、API 結構驗證）
 - [x] 全部 21 個測試通過（3 個測試檔案）
 - [ ] 撰寫 tender tRPC 路由測試
+
+## Bug 修復：爬蟲 INSERT tenders 失敗（2026-03-26）
+- [x] 根因：API 回傳 snake_case（project_name、org_name等），但程式碼使用 camelCase 介面，導致所有欄位為 undefined，projectName NOT NULL 失敗
+- [x] 修復：AcebidxTender 介面改為 snake_case，upsertTender 欄位對應更新，21 個測試通過
