@@ -49,10 +49,14 @@ import {
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress, crawlCustomTarget } from "./crawler";
 import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
+import { runTenderCrawl } from "./tenderCrawler";
+import { scoreUnscoredTenders, rescoreTender } from "./tenderScorer";
 import * as cheerio from "cheerio";
 import * as XLSX from "xlsx";
 import { getSchedulerStatus } from "./scheduler";
-import { PRODUCT_CATEGORIES } from "../drizzle/schema";
+import { PRODUCT_CATEGORIES, tenders, tenderCrawlJobs } from "../drizzle/schema";
+import { getDb } from "./db";
+import { desc, eq, isNull, isNotNull, and, like, or, gte, lte, sql } from "drizzle-orm";
 
 // ─── Product Router ───────────────────────────────────────────────────────────
 
@@ -988,6 +992,136 @@ const newsRouter = router({
   }),
 });
 
+// ─── Tender Router ──────────────────────────────────────────────────────────
+const tenderRouter = router({
+  // List tenders with filters
+  list: publicProcedure
+    .input(z.object({
+      page: z.number().min(1).default(1),
+      pageSize: z.number().min(1).max(100).default(20),
+      keyword: z.string().optional(),
+      priority: z.enum(["High", "Medium", "Low"]).optional(),
+      recommend: z.boolean().optional(),
+      category: z.string().optional(),
+      minScore: z.number().optional(),
+      scored: z.boolean().optional(),
+    }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { items: [], total: 0 };
+
+      const conditions = [];
+      if (input.keyword) {
+        conditions.push(or(
+          like(tenders.projectName, `%${input.keyword}%`),
+          like(tenders.orgName, `%${input.keyword}%`)
+        ));
+      }
+      if (input.priority) conditions.push(eq(tenders.aiPriority, input.priority));
+      if (input.recommend !== undefined) conditions.push(eq(tenders.aiRecommend, input.recommend));
+      if (input.category) conditions.push(eq(tenders.aiCategory, input.category));
+      if (input.minScore !== undefined) conditions.push(gte(tenders.aiScore, input.minScore));
+      if (input.scored === true) conditions.push(isNotNull(tenders.aiScore));
+      if (input.scored === false) conditions.push(isNull(tenders.aiScore));
+
+      const offset = (input.page - 1) * input.pageSize;
+      const query = conditions.length > 0 ? and(...conditions) : undefined;
+
+      const [items, countResult] = await Promise.all([
+        query
+          ? db.select().from(tenders).where(query).orderBy(desc(tenders.aiScore), desc(tenders.createdAt)).limit(input.pageSize).offset(offset)
+          : db.select().from(tenders).orderBy(desc(tenders.aiScore), desc(tenders.createdAt)).limit(input.pageSize).offset(offset),
+        query
+          ? db.select({ count: sql<number>`count(*)` }).from(tenders).where(query)
+          : db.select({ count: sql<number>`count(*)` }).from(tenders),
+      ]);
+
+      return { items, total: Number(countResult[0]?.count ?? 0) };
+    }),
+
+  // Get stats for dashboard
+  stats: publicProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return { total: 0, scored: 0, recommended: 0, highPriority: 0, unscored: 0 };
+
+    const [total, scored, recommended, highPriority] = await Promise.all([
+      db.select({ count: sql<number>`count(*)` }).from(tenders),
+      db.select({ count: sql<number>`count(*)` }).from(tenders).where(isNotNull(tenders.aiScore)),
+      db.select({ count: sql<number>`count(*)` }).from(tenders).where(eq(tenders.aiRecommend, true)),
+      db.select({ count: sql<number>`count(*)` }).from(tenders).where(eq(tenders.aiPriority, "High")),
+    ]);
+
+    const t = Number(total[0]?.count ?? 0);
+    const s = Number(scored[0]?.count ?? 0);
+    return {
+      total: t,
+      scored: s,
+      unscored: t - s,
+      recommended: Number(recommended[0]?.count ?? 0),
+      highPriority: Number(highPriority[0]?.count ?? 0),
+    };
+  }),
+
+  // Get single tender
+  getById: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return null;
+      const rows = await db.select().from(tenders).where(eq(tenders.id, input.id)).limit(1);
+      return rows[0] ?? null;
+    }),
+
+  // Re-score a single tender
+  rescore: publicProcedure
+    .input(z.object({ id: z.string() }))
+    .mutation(async ({ input }) => {
+      const result = await rescoreTender(input.id);
+      if (!result) return { success: false, message: "標案不存在或評分失敗" };
+      return { success: true, score: result.score, priority: result.priority };
+    }),
+
+  // Score all unscored tenders (background)
+  scoreAll: publicProcedure.mutation(async () => {
+    scoreUnscoredTenders().catch(console.error);
+    return { success: true, message: "AI 評分任務已啟動，請稍後刷新" };
+  }),
+});
+
+// ─── Tender Crawl Router ─────────────────────────────────────────────────────
+const tenderCrawlRouter = router({
+  // Trigger manual crawl
+  trigger: publicProcedure.mutation(async () => {
+    runTenderCrawl("manual")
+      .then(result => {
+        if (result.newTenders > 0) {
+          scoreUnscoredTenders().catch(console.error);
+        }
+      })
+      .catch(console.error);
+    return { success: true, message: "標案爬取任務已啟動，完成後將自動進行 AI 評分" };
+  }),
+
+  // Get crawl job history
+  jobs: publicProcedure
+    .input(z.object({ limit: z.number().min(1).max(50).default(20) }))
+    .query(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return [];
+      return db.select().from(tenderCrawlJobs).orderBy(desc(tenderCrawlJobs.createdAt)).limit(input.limit);
+    }),
+
+  // Delete a crawl job
+  deleteJob: publicProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { success: false };
+      await db.delete(tenderCrawlJobs).where(eq(tenderCrawlJobs.id, input.id));
+      return { success: true };
+    }),
+});
+
 export const appRouter = router({
   system: systemRouter,
   auth: router({
@@ -1006,7 +1140,8 @@ export const appRouter = router({
   settings: settingsRouter,
   export: exportRouter,
   targets: targetsRouter,
-  news: newsRouter,
+   news: newsRouter,
+  tender: tenderRouter,
+  tenderCrawl: tenderCrawlRouter,
 });
-
 export type AppRouter = typeof appRouter;

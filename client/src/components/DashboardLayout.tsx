@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, PanelLeft, Package, Bell, Settings, Bot, TrendingDown, Download, Globe, Rss, Activity, Newspaper } from "lucide-react";
+import { LayoutDashboard, PanelLeft, FileText, Bell, Settings, Bot, Landmark, RefreshCw, Brain, ClipboardList } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -19,13 +19,10 @@ import { useLocation } from "wouter";
 
 const menuItems = [
   { icon: LayoutDashboard, label: "儀表板", path: "/" },
-  { icon: Package, label: "產品列表", path: "/products" },
-  { icon: Bot, label: "爬蟲管理", path: "/crawler" },
-  { icon: Download, label: "資料匯出", path: "/export" },
-  { icon: Globe, label: "目標網站", path: "/targets" },
-  { icon: Rss, label: "新聞來源", path: "/news/sources" },
-  { icon: Activity, label: "新聞爬蟲", path: "/news/crawler" },
-  { icon: Newspaper, label: "新聞文章", path: "/news/articles" },
+  { icon: FileText, label: "標案列表", path: "/tenders" },
+  { icon: Brain, label: "AI 評分管理", path: "/tenders/scoring" },
+  { icon: Bot, label: "爬蟲管理", path: "/tender-crawler" },
+  { icon: ClipboardList, label: "爬取記錄", path: "/tender-crawler/jobs" },
   { icon: Bell, label: "通知中心", path: "/notifications" },
   { icon: Settings, label: "系統設定", path: "/settings" },
 ];
@@ -137,7 +134,7 @@ function DashboardLayoutContent({
               </button>
               {!isCollapsed && (
                 <div className="flex items-center gap-2 min-w-0">
-                  <TrendingDown className="h-5 w-5 text-primary shrink-0" />
+                  <Landmark className="h-5 w-5 text-primary shrink-0" />
                   <span className="font-bold tracking-tight truncate text-primary">
                     政府標案資訊網
                   </span>
@@ -200,7 +197,7 @@ function DashboardLayoutContent({
             <div className="flex items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-lg" />
               <div className="flex items-center gap-2">
-                <TrendingDown className="h-4 w-4 text-primary" />
+                <Landmark className="h-4 w-4 text-primary" />
                 <span className="font-semibold text-sm text-foreground">
                   {activeMenuItem?.label ?? "政府標案資訊網"}
                 </span>

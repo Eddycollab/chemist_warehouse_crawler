@@ -254,3 +254,40 @@
 ## 系統名稱更新（2026-03-26）
 - [x] 全站名稱改為「政府標案資訊網」（DashboardLayout、Home.tsx、PasswordGate.tsx、index.html）
 - [x] 更新 VITE_APP_TITLE 環境變數（需透過 Management UI > Settings > General 手動設定）
+
+## 系統改造主體工程（2026-03-26）
+
+### Phase 1：Logo 與 App Title
+- [x] DashboardLayout.tsx：將 TrendingDown 圖示改為 Landmark
+- [x] PasswordGate.tsx：將 TrendingDown 圖示改為 Landmark
+- [x] Home.tsx：更新頁面圖示
+- [ ] 更新 VITE_APP_TITLE 為「政府標案資訊網」（需透過 Management UI 手動設定）
+
+### Phase 2：資料庫 Schema 改造
+- [x] schema.ts：新增 tenders 表（標案資料 + AI 評分欄位）
+- [x] schema.ts：新增 tender_crawl_jobs 表（爬蟲任務歷史）
+- [x] 執行 migration SQL
+
+### Phase 3：後端 acebidx 爬蟲
+- [x] 新增 server/tenderCrawler.ts：呼叫 acebidx API，去重存入資料庫
+- [x] 新增 tender tRPC router：標案查詢、篩選、分頁、手動評分、統計
+- [x] 新增 tenderCrawl tRPC router：爬蟲觸發、任務歷史、刪除
+- [x] 更新 server/routers.ts：整合新 router
+
+### Phase 4：AI 評分引擎
+- [x] 新增 server/tenderScorer.ts：呼叫 invokeLLM，傳入標案資料與評分 Prompt，解析 JSON
+- [x] 後端：爬蟲完成後自動觸發 AI 評分（背景執行）
+- [x] 後端：新增 tender.rescore mutation（手動重新評分）
+- [x] 後端：新增 tender.scoreAll mutation（批次評分未評分標案）
+
+### Phase 5：前端儀表板重新設計
+- [x] 更新 DashboardLayout.tsx：側邊欄改為標案相關導航（標案列表、AI 評分、爬蟲管理、爬取記錄）
+- [x] 新增 pages/TenderDashboard.tsx：統計卡片 + 推薦標案列表 + 快速操作
+- [x] 新增 pages/TenderList.tsx：標案列表（篩選、排序、AI 評分顯示、詳情 Dialog）
+- [x] 新增 pages/TenderCrawlerManager.tsx：爬蟲管理（手動觸發、統計、任務歷史）
+- [x] 更新 App.tsx：替換舊路由為新標案系統路由
+
+### Phase 6：測試
+- [x] 撰寫 tender.test.ts：11 個測試（tenderCrawler 解析、評分邏輯、API 結構驗證）
+- [x] 全部 21 個測試通過（3 個測試檔案）
+- [ ] 撰寫 tender tRPC 路由測試

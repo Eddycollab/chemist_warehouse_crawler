@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { usePassword } from "@/contexts/PasswordContext";
-import { TrendingDown, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
+import { Landmark, Lock, Eye, EyeOff, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -66,7 +66,7 @@ export default function PasswordGate() {
             {/* Logo */}
             <div className="flex flex-col items-center gap-3 mb-8">
               <div className="h-14 w-14 rounded-2xl bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <TrendingDown className="h-7 w-7 text-primary" />
+                <Landmark className="h-7 w-7 text-primary" />
               </div>
               <div className="text-center">
                 <h1 className="text-xl font-bold tracking-tight text-foreground">

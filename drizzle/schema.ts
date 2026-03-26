@@ -234,3 +234,55 @@ export const newsCrawlJobs = mysqlTable("news_crawl_jobs", {
 
 export type NewsCrawlJob = typeof newsCrawlJobs.$inferSelect;
 export type InsertNewsCrawlJob = typeof newsCrawlJobs.$inferInsert;
+
+/**
+ * Tenders table - government procurement tender data from acebidx API
+ */
+export const tenders = mysqlTable("tenders", {
+  id: varchar("id", { length: 36 }).primaryKey(),
+  source: varchar("source", { length: 20 }).notNull().default("acebidx"),
+  projectNumber: varchar("projectNumber", { length: 50 }),
+  projectName: text("projectName").notNull(),
+  orgId: varchar("orgId", { length: 50 }),
+  orgName: varchar("orgName", { length: 300 }),
+  budget: int("budget"),
+  catName: varchar("catName", { length: 100 }),
+  typeofTender: varchar("typeofTender", { length: 200 }),
+  typeofAward: varchar("typeofAward", { length: 200 }),
+  isBudgetPublic: boolean("isBudgetPublic").default(true),
+  postDate: varchar("postDate", { length: 20 }),
+  submitDeadline: varchar("submitDeadline", { length: 30 }),
+  queryDate: varchar("queryDate", { length: 20 }),
+  // AI scoring fields
+  aiScore: int("aiScore"),
+  aiPriority: varchar("aiPriority", { length: 10 }),   // High / Medium / Low
+  aiRecommend: boolean("aiRecommend"),
+  aiCategory: varchar("aiCategory", { length: 20 }),   // 教育 / AI / 活動 / 系統 / 其他
+  aiBudgetFit: varchar("aiBudgetFit", { length: 10 }), // 符合 / 偏高 / 過高
+  aiReasons: json("aiReasons"),
+  aiRisks: json("aiRisks"),
+  scoredAt: timestamp("scoredAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Tender = typeof tenders.$inferSelect;
+export type InsertTender = typeof tenders.$inferInsert;
+
+/**
+ * Tender crawl jobs table - crawl task history for acebidx
+ */
+export const tenderCrawlJobs = mysqlTable("tender_crawl_jobs", {
+  id: int("id").autoincrement().primaryKey(),
+  jobType: mysqlEnum("jobType", ["scheduled", "manual"]).default("manual").notNull(),
+  status: mysqlEnum("status", ["pending", "running", "completed", "failed"]).default("pending").notNull(),
+  newTenders: int("newTenders").default(0),
+  totalFetched: int("totalFetched").default(0),
+  scoredCount: int("scoredCount").default(0),
+  errorMessage: text("errorMessage"),
+  startedAt: timestamp("startedAt"),
+  completedAt: timestamp("completedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type TenderCrawlJob = typeof tenderCrawlJobs.$inferSelect;
+export type InsertTenderCrawlJob = typeof tenderCrawlJobs.$inferInsert;

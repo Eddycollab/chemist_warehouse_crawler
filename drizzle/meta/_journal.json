@@ -36,6 +36,13 @@
       "when": 1771683297332,
       "tag": "0004_milky_sunspot",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1774495903843,
+      "tag": "0005_furry_siren",
+      "breakpoints": true
     }
   ]
 }
