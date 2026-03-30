@@ -1,0 +1,25 @@
+{
+  "query": "SELECT COUNT(*) as notification_count FROM notifications;\nSELECT COUNT(*) as news_articles_count FROM news_articles;\nSELECT COUNT(*) as news_sources_count FROM news_sources;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute SELECT COUNT(*) as notification_count FROM notifications;\nSELECT COUNT(*) as news_articles_count FROM news_articles;\nSELECT COUNT(*) as news_sources_count FROM news_sources;",
+  "rows": [
+    {
+      "notification_count": "33"
+    },
+    {
+      "notification_count": "news_articles_count"
+    },
+    {
+      "notification_count": "0"
+    },
+    {
+      "notification_count": "news_sources_count"
+    },
+    {
+      "notification_count": "0"
+    }
+  ],
+  "messages": [],
+  "stdout": "notification_count\n33\nnews_articles_count\n0\nnews_sources_count\n0\n",
+  "stderr": "",
+  "execution_time_ms": 1981
+}

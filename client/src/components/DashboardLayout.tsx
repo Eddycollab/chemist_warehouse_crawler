@@ -11,7 +11,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, PanelLeft, FileText, Bell, Settings, Bot, Landmark, RefreshCw, Brain, ClipboardList } from "lucide-react";
+import { LayoutDashboard, PanelLeft, FileText, Bell, Settings, Bot, Landmark, RefreshCw, Brain, ClipboardList, Newspaper, Rss, List } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Badge } from "@/components/ui/badge";
 import { CSSProperties, useEffect, useRef, useState } from "react";
@@ -23,6 +23,9 @@ const menuItems = [
   { icon: Brain, label: "AI 評分管理", path: "/tenders/scoring" },
   { icon: Bot, label: "爬蟲管理", path: "/tender-crawler" },
   { icon: ClipboardList, label: "爬取記錄", path: "/tender-crawler/jobs" },
+  { icon: Rss, label: "新聞來源設定", path: "/news/sources" },
+  { icon: Newspaper, label: "新聞爬蟲管理", path: "/news/crawler" },
+  { icon: List, label: "新聞文章列表", path: "/news/articles" },
   { icon: Bell, label: "通知中心", path: "/notifications" },
   { icon: Settings, label: "系統設定", path: "/settings" },
 ];

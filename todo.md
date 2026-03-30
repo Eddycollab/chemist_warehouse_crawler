@@ -295,3 +295,8 @@
 ## Bug 修復：爬蟲 INSERT tenders 失敗（2026-03-26）
 - [x] 根因：API 回傳 snake_case（project_name、org_name等），但程式碼使用 camelCase 介面，導致所有欄位為 undefined，projectName NOT NULL 失敗
 - [x] 修復：AcebidxTender 介面改為 snake_case，upsertTender 欄位對應更新，21 個測試通過
+
+## 通知中心與新聞爬取功能（2026-03-30）
+- [x] 清除通知中心歷史紀錄（33 筆通知已刪除）
+- [x] 查看資料庫：news_articles、news_sources、news_crawl_jobs 表均存在，後端 newsCrawler.ts 與 newsRouter 均完整
+- [x] 恢復新聞爬取功能：側邊欄加入新聞來源設定、新聞爬蟲管理、新聞文章列表導航，App.tsx 加入對應路由

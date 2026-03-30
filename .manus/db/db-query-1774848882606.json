@@ -1,0 +1,49 @@
+{
+  "query": "SHOW TABLES;",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user xDjs1wKhb9v8oYP.2c46efc255ad --database FaVggcGXTFxcpjbXyGW2js --execute SHOW TABLES;",
+  "rows": [
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "__drizzle_migrations"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "crawl_jobs"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "crawl_targets"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "crawler_settings"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "news_articles"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "news_crawl_jobs"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "news_sources"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "notifications"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "price_history"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "products"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "tender_crawl_jobs"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "tenders"
+    },
+    {
+      "Tables_in_FaVggcGXTFxcpjbXyGW2js": "users"
+    }
+  ],
+  "messages": [],
+  "stdout": "Tables_in_FaVggcGXTFxcpjbXyGW2js\n__drizzle_migrations\ncrawl_jobs\ncrawl_targets\ncrawler_settings\nnews_articles\nnews_crawl_jobs\nnews_sources\nnotifications\nprice_history\nproducts\ntender_crawl_jobs\ntenders\nusers\n",
+  "stderr": "",
+  "execution_time_ms": 1608
+}

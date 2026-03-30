@@ -10,6 +10,9 @@ import TenderList from "./pages/TenderList";
 import TenderCrawlerManager from "./pages/TenderCrawlerManager";
 import Notifications from "./pages/Notifications";
 import SettingsPage from "./pages/Settings";
+import NewsSources from "./pages/NewsSources";
+import NewsCrawler from "./pages/NewsCrawler";
+import NewsArticles from "./pages/NewsArticles";
 import DashboardLayout from "./components/DashboardLayout";
 import PasswordGate from "./pages/PasswordGate";
 
@@ -28,6 +31,9 @@ function ProtectedRouter() {
         <Route path="/tenders/scoring" component={TenderList} />
         <Route path="/tender-crawler" component={TenderCrawlerManager} />
         <Route path="/tender-crawler/jobs" component={TenderCrawlerManager} />
+        <Route path="/news/sources" component={NewsSources} />
+        <Route path="/news/crawler" component={NewsCrawler} />
+        <Route path="/news/articles" component={NewsArticles} />
         <Route path="/notifications" component={Notifications} />
         <Route path="/settings" component={SettingsPage} />
         <Route path="/404" component={NotFound} />
