@@ -179,6 +179,27 @@ async function runMigrations(connectionString: string) {
       \`createdAt\` timestamp NOT NULL DEFAULT (now()),
       CONSTRAINT \`news_crawl_jobs_id\` PRIMARY KEY(\`id\`)
     )`);
+    // ─── Schema migrations for existing tables (idempotent ALTERs) ─────────────
+    // Fix news_articles: ensure nullable columns and urlHash column exist
+    try {
+      await conn.execute(`ALTER TABLE \`news_articles\` MODIFY COLUMN \`sourceId\` int NULL`);
+    } catch { /* already nullable */ }
+    try {
+      await conn.execute(`ALTER TABLE \`news_articles\` MODIFY COLUMN \`sourceName\` varchar(200) NULL`);
+    } catch { /* already nullable */ }
+    try {
+      await conn.execute(`ALTER TABLE \`news_articles\` MODIFY COLUMN \`title\` varchar(1000) NOT NULL`);
+    } catch { /* already correct */ }
+    try {
+      await conn.execute(`ALTER TABLE \`news_articles\` MODIFY COLUMN \`publishedAt\` timestamp NULL`);
+    } catch { /* already timestamp */ }
+    // Add urlHash column if missing
+    const [urlHashCols] = await conn.execute(`SHOW COLUMNS FROM \`news_articles\` LIKE 'urlHash'`) as any;
+    if (urlHashCols.length === 0) {
+      await conn.execute(`ALTER TABLE \`news_articles\` ADD COLUMN \`urlHash\` varchar(64) NULL`);
+    }
+    // Reset stuck news crawl jobs
+    await conn.execute(`UPDATE \`news_crawl_jobs\` SET status='failed', errorMessage='系統重啟後自動重置', completedAt=NOW() WHERE status='running'`);
     // Insert default password if not exists
     await conn.execute(
       `INSERT IGNORE INTO \`crawler_settings\` (\`key\`, \`value\`, \`description\`) VALUES ('access_password', 'CW150721', 'System access password')`
