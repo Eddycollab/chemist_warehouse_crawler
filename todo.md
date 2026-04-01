@@ -300,3 +300,10 @@
 - [x] 清除通知中心歷史紀錄（33 筆通知已刪除）
 - [x] 查看資料庫：news_articles、news_sources、news_crawl_jobs 表均存在，後端 newsCrawler.ts 與 newsRouter 均完整
 - [x] 恢復新聞爬取功能：側邊欄加入新聞來源設定、新聞爬蟲管理、新聞文章列表導航，App.tsx 加入對應路由
+
+## Bug 修復：新聞爬蟲任務持續「已中止」（2026-04-01）
+- [x] 根因 1：CSSSelector 錯誤（article + .entry-title a 是 WordPress 樣式，天下雜誌與台北市教育局均不適用）
+- [x] 根因 2：台北市教育局 URL 為單篇文章頁而非列表頁
+- [x] 根因 3：伺服器重啟時 resetStuckJobs 無條件把所有 running 任務改為 stopped
+- [x] 修復：更新資料庫中兩個來源的正確 selector（天下雜誌: h3 + a[href*="/article/"]；台北市教育局: table tr + a[href*="News_Content"]）
+- [x] 修復：resetStuckJobs 與 resetStuckNewsCrawlJobs 加入 30 分鐘時間限制，避免正常執行中的任務被誤判為卡住

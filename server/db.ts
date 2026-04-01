@@ -365,10 +365,12 @@ export async function getLatestPriceForProduct(productId: number) {
 export async function resetStuckJobs() {
   const db = await getDb();
   if (!db) return 0;
+  // Only reset jobs that have been running for more than 30 minutes (to avoid killing active jobs)
+  const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
   const result = await db
     .update(crawlJobs)
     .set({ status: "stopped", completedAt: new Date() })
-    .where(eq(crawlJobs.status, "running"));
+    .where(and(eq(crawlJobs.status, "running"), lte(crawlJobs.startedAt, thirtyMinsAgo)));
   const affected = (result as unknown as { affectedRows?: number }[])[0]?.affectedRows ?? 0;
   if (affected > 0) {
     console.log(`[Database] Reset ${affected} stuck running job(s) to stopped`);
@@ -685,7 +687,9 @@ export async function deleteAllNewsCrawlJobs() {
 export async function resetStuckNewsCrawlJobs() {
   const db = await getDb();
   if (!db) return;
+  // Only reset jobs that have been running for more than 30 minutes (to avoid killing active jobs)
+  const thirtyMinsAgo = new Date(Date.now() - 30 * 60 * 1000);
   await db.update(newsCrawlJobs)
     .set({ status: "stopped", completedAt: new Date() })
-    .where(eq(newsCrawlJobs.status, "running"));
+    .where(and(eq(newsCrawlJobs.status, "running"), lte(newsCrawlJobs.startedAt, thirtyMinsAgo)));
 }
