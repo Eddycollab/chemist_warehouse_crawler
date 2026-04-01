@@ -224,6 +224,105 @@ export async function runNewsCrawl(sourceId: number): Promise<void> {
 }
 
 /**
+ * Test news selectors on a given URL without saving to DB
+ * Returns a preview of articles that would be scraped
+ */
+export async function testNewsSelector(params: {
+  url: string;
+  articleSelector: string;
+  titleSelector: string;
+  dateSelector?: string;
+  excerptSelector?: string;
+  imageSelector?: string;
+}): Promise<{
+  success: boolean;
+  articles: Array<{ title: string; url: string; publishedAt?: string; excerpt?: string }>;
+  totalFound: number;
+  errorMessage?: string;
+}> {
+  const browser = await chromium.launch({ headless: true });
+  const context = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    locale: "zh-TW",
+  });
+  const page = await context.newPage();
+
+  try {
+    log(`[testSelector] Loading: ${params.url}`);
+    await page.goto(params.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+
+    // Wait for article selector
+    try {
+      await page.waitForSelector(params.articleSelector, { timeout: 10000 });
+    } catch {
+      return {
+        success: false,
+        articles: [],
+        totalFound: 0,
+        errorMessage: `找不到文章選擇器「${params.articleSelector}」，請確認選擇器是否正確`,
+      };
+    }
+
+    const results = await page.evaluate(
+      ({ articleSel, titleSel, dateSel, excerptSel, imageSel }) => {
+        const cards = Array.from(document.querySelectorAll(articleSel));
+        const totalFound = cards.length;
+        const articles = cards.slice(0, 10).map((card) => {
+          const titleEl = card.querySelector(titleSel) as HTMLAnchorElement | null;
+          const title = titleEl?.textContent?.trim() ?? "";
+          const url = titleEl?.href ?? (card.querySelector("a") as HTMLAnchorElement | null)?.href ?? "";
+          const dateEl = dateSel ? card.querySelector(dateSel) : null;
+          const publishedAt = dateEl?.textContent?.trim() ?? undefined;
+          const excerptEl = excerptSel ? card.querySelector(excerptSel) : null;
+          const excerpt = excerptEl?.textContent?.trim() ?? undefined;
+          return { title, url, publishedAt, excerpt };
+        });
+        return { totalFound, articles };
+      },
+      {
+        articleSel: params.articleSelector,
+        titleSel: params.titleSelector,
+        dateSel: params.dateSelector ?? null,
+        excerptSel: params.excerptSelector ?? null,
+        imageSel: params.imageSelector ?? null,
+      }
+    );
+
+    const validArticles = results.articles.filter((a) => a.title || a.url);
+
+    if (validArticles.length === 0) {
+      return {
+        success: false,
+        articles: [],
+        totalFound: results.totalFound,
+        errorMessage:
+          results.totalFound > 0
+            ? `找到 ${results.totalFound} 個文章容器，但標題選擇器「${params.titleSelector}」未能抓到任何標題，請確認標題選擇器`
+            : `文章選擇器「${params.articleSelector}」找到 0 個元素，請確認選擇器是否正確`,
+      };
+    }
+
+    return {
+      success: true,
+      articles: validArticles,
+      totalFound: results.totalFound,
+    };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    return {
+      success: false,
+      articles: [],
+      totalFound: 0,
+      errorMessage: `載入頁面失敗：${msg}`,
+    };
+  } finally {
+    await context.close();
+    await browser.close();
+  }
+}
+
+/**
  * Run news crawls for all active sources
  */
 export async function runAllNewsCrawls(): Promise<void> {

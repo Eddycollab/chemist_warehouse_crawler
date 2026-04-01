@@ -307,3 +307,8 @@
 - [x] 根因 3：伺服器重啟時 resetStuckJobs 無條件把所有 running 任務改為 stopped
 - [x] 修復：更新資料庫中兩個來源的正確 selector（天下雜誌: h3 + a[href*="/article/"]；台北市教育局: table tr + a[href*="News_Content"]）
 - [x] 修復：resetStuckJobs 與 resetStuckNewsCrawlJobs 加入 30 分鐘時間限制，避免正常執行中的任務被誤判為卡住
+## 新聞來源擴充與 Selector 測試功能（2026-04-01）
+- [ ] 新增預設新聞來源：行政院電子報、數位部新聞、教育部公告
+- [ ] 後端：新增 news.testSelector mutation（Playwright 測試 selector，回傳前 5 筆預覽）
+- [ ] 前端：NewsSources.tsx 加入「測試 Selector」按鈕與預覽結果 Dialog
+- [ ] 前端：爬取任務列表加入成功/失敗狀態顯示（文章數量、錯誤訊息）

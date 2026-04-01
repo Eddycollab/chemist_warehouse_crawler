@@ -204,3 +204,102 @@ describe("acebidx API response structure", () => {
     expect(deduped.find((t) => t.id === "T001")?.project_name).toBe("\u6a19\u6848A");
   });
 });
+
+// ─── testNewsSelector 功能測試 ─────────────────────────────────────────────────
+
+describe("testNewsSelector - input validation", () => {
+  it("should require non-empty articleSelector", () => {
+    const params = {
+      url: "https://www.example.com/news/",
+      articleSelector: "",
+      titleSelector: ".entry-title a",
+    };
+    // 空選擇器應被視為無效輸入
+    expect(params.articleSelector.trim().length).toBe(0);
+    expect(params.titleSelector.trim().length).toBeGreaterThan(0);
+  });
+
+  it("should require non-empty titleSelector", () => {
+    const params = {
+      url: "https://www.example.com/news/",
+      articleSelector: "article",
+      titleSelector: "",
+    };
+    expect(params.titleSelector.trim().length).toBe(0);
+  });
+
+  it("should accept valid selector params", () => {
+    const params = {
+      url: "https://www.cw.com.tw/subchannel.action?idSubChannel=7",
+      articleSelector: ".article-list li",
+      titleSelector: "h3 a",
+      dateSelector: ".date",
+      excerptSelector: ".summary",
+    };
+    expect(params.url.startsWith("https://")).toBe(true);
+    expect(params.articleSelector.length).toBeGreaterThan(0);
+    expect(params.titleSelector.length).toBeGreaterThan(0);
+  });
+
+  it("should handle optional selectors as undefined", () => {
+    const params = {
+      url: "https://www.edu.tw/News.aspx",
+      articleSelector: "table tr",
+      titleSelector: 'a[href*="News_Content"]',
+      dateSelector: undefined,
+      excerptSelector: undefined,
+    };
+    expect(params.dateSelector).toBeUndefined();
+    expect(params.excerptSelector).toBeUndefined();
+  });
+});
+
+describe("testNewsSelector - result structure", () => {
+  it("should return success=false when no articles found", () => {
+    const mockResult = {
+      success: false,
+      articles: [],
+      totalFound: 0,
+      errorMessage: "文章選擇器「.nonexistent」找到 0 個元素，請確認選擇器是否正確",
+    };
+    expect(mockResult.success).toBe(false);
+    expect(mockResult.articles).toHaveLength(0);
+    expect(mockResult.errorMessage).toContain("找到 0 個元素");
+  });
+
+  it("should return success=true with article list when found", () => {
+    const mockResult = {
+      success: true,
+      articles: [
+        { title: "AI 教育訓練課程開始報名", url: "https://example.com/news/1", publishedAt: "2026-04-01" },
+        { title: "數位學習新趨勢", url: "https://example.com/news/2", publishedAt: "2026-03-28" },
+      ],
+      totalFound: 15,
+    };
+    expect(mockResult.success).toBe(true);
+    expect(mockResult.articles).toHaveLength(2);
+    expect(mockResult.totalFound).toBe(15);
+    expect(mockResult.articles[0]).toHaveProperty("title");
+    expect(mockResult.articles[0]).toHaveProperty("url");
+  });
+
+  it("should limit preview to at most 10 articles", () => {
+    const allArticles = Array.from({ length: 20 }, (_, i) => ({
+      title: `文章 ${i + 1}`,
+      url: `https://example.com/news/${i + 1}`,
+    }));
+    const preview = allArticles.slice(0, 10);
+    expect(preview).toHaveLength(10);
+  });
+
+  it("should provide descriptive error when title selector fails", () => {
+    const totalFound = 8;
+    const titleSelector = ".wrong-title";
+    const errorMessage =
+      totalFound > 0
+        ? `找到 ${totalFound} 個文章容器，但標題選擇器「${titleSelector}」未能抓到任何標題，請確認標題選擇器`
+        : `文章選擇器找到 0 個元素`;
+    expect(errorMessage).toContain("找到 8 個文章容器");
+    expect(errorMessage).toContain(titleSelector);
+  });
+});

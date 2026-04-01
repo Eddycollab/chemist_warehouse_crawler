@@ -48,7 +48,7 @@ import {
   resetStuckNewsCrawlJobs,
 } from "./db";
 import { runCrawl, stopCrawl, isCrawlRunning, getCrawlProgress, crawlCustomTarget } from "./crawler";
-import { runNewsCrawl, isNewsCrawlRunning } from "./newsCrawler";
+import { runNewsCrawl, isNewsCrawlRunning, testNewsSelector } from "./newsCrawler";
 import { runTenderCrawl } from "./tenderCrawler";
 import { scoreUnscoredTenders, rescoreTender } from "./tenderScorer";
 import * as cheerio from "cheerio";
@@ -990,6 +990,20 @@ const newsRouter = router({
     await deleteAllNewsCrawlJobs();
     return { success: true };
   }),
+  testSelector: publicProcedure
+    .input(
+      z.object({
+        url: z.string().url(),
+        articleSelector: z.string().min(1),
+        titleSelector: z.string().min(1),
+        dateSelector: z.string().optional(),
+        excerptSelector: z.string().optional(),
+        imageSelector: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      return testNewsSelector(input);
+    }),
 });
 
 // ─── Tender Router ──────────────────────────────────────────────────────────
