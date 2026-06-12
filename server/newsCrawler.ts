@@ -51,18 +51,25 @@ async function scrapeNewsPage(
 
   try {
     log(`Scraping page: ${pageUrl}`);
-    // 增加超時時間到 60 秒，支持 JavaScript 渲染較慢的網站（如客家委員會）
-    await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 60000 });
+    // 增加超時時間到 90 秒，支持 JavaScript 渲染較慢的網站（如客家委員會）
+    log(`[DEBUG] Starting page.goto with 90s timeout...`);
+    await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+    log(`[DEBUG] page.goto completed`);
 
-    // 等待 JavaScript 執行完成
-    await page.waitForTimeout(3000);
+    // 等待 JavaScript 執行完成（增加到 5 秒）
+    log(`[DEBUG] Waiting 5 seconds for JS to complete...`);
+    await page.waitForTimeout(5000);
+    log(`[DEBUG] Wait completed`);
 
     // Wait for article cards to appear
     try {
-      // 增加等待時間到 15 秒
-      await page.waitForSelector(source.articleSelector, { timeout: 15000 });
-    } catch {
-      log(`Warning: article selector "${source.articleSelector}" not found on ${pageUrl}`);
+      // 增加等待時間到 20 秒
+      log(`[DEBUG] Waiting for selector: ${source.articleSelector}`);
+      await page.waitForSelector(source.articleSelector, { timeout: 20000 });
+      log(`[DEBUG] Selector found`);
+    } catch (e) {
+      log(`Error: article selector "${source.articleSelector}" not found on ${pageUrl}`);
+      log(`[DEBUG] Error details: ${e instanceof Error ? e.message : String(e)}`);
       return { articles: [], nextPageUrl: null };
     }
 
