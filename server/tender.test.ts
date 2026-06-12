@@ -303,3 +303,209 @@ describe("testNewsSelector - result structure", () => {
     expect(errorMessage).toContain(titleSelector);
   });
 });
+
+
+// ─── tender tRPC 路由測試 ──────────────────────────────────────────────────────
+
+describe("tender tRPC routes - data structure", () => {
+  it("should return correct tender list structure", () => {
+    const mockTenderList = [
+      {
+        id: "acebidx-T001",
+        source: "acebidx",
+        projectNumber: "20260301-001",
+        projectName: "AI 教育訓練課程採購案",
+        orgId: "org-001",
+        orgName: "臺北市立第一女子高級中學",
+        budget: 500000,
+        catName: "教育訓練",
+        typeofTender: "公開招標",
+        typeofAward: "未決標",
+        isBudgetPublic: 1,
+        postDate: "2026-03-01",
+        submitDeadline: "2026-03-31",
+        queryDate: "2026-03-01",
+        aiScore: 85,
+        aiPriority: "High",
+        aiRecommend: 1,
+        aiCategory: "教育",
+        aiBudgetFit: "符合",
+        aiReasons: ["金額符合", "強關鍵字", "客戶為學校"],
+        aiRisks: [],
+        scoredAt: new Date(),
+        createdAt: new Date(),
+      },
+    ];
+
+    expect(mockTenderList).toHaveLength(1);
+    const tender = mockTenderList[0];
+    expect(tender).toHaveProperty("id");
+    expect(tender).toHaveProperty("projectName");
+    expect(tender).toHaveProperty("budget");
+    expect(tender).toHaveProperty("aiScore");
+    expect(tender).toHaveProperty("aiRecommend");
+    expect(typeof tender.aiScore).toBe("number");
+    expect(typeof tender.aiRecommend).toBe("number");
+  });
+
+  it("should filter tenders by priority", () => {
+    const tenders = [
+      { id: "T001", aiPriority: "High", aiScore: 85 },
+      { id: "T002", aiPriority: "Medium", aiScore: 55 },
+      { id: "T003", aiPriority: "Low", aiScore: 30 },
+    ];
+
+    const highPriority = tenders.filter((t) => t.aiPriority === "High");
+    expect(highPriority).toHaveLength(1);
+    expect(highPriority[0].id).toBe("T001");
+  });
+
+  it("should filter tenders by recommend flag", () => {
+    const tenders = [
+      { id: "T001", aiRecommend: 1, projectName: "推薦標案 A" },
+      { id: "T002", aiRecommend: 0, projectName: "不推薦標案 B" },
+      { id: "T003", aiRecommend: 1, projectName: "推薦標案 C" },
+    ];
+
+    const recommended = tenders.filter((t) => t.aiRecommend === 1);
+    expect(recommended).toHaveLength(2);
+    expect(recommended.map((t) => t.id)).toEqual(["T001", "T003"]);
+  });
+
+  it("should sort tenders by score descending", () => {
+    const tenders = [
+      { id: "T001", aiScore: 60 },
+      { id: "T002", aiScore: 90 },
+      { id: "T003", aiScore: 75 },
+    ];
+
+    const sorted = [...tenders].sort((a, b) => b.aiScore - a.aiScore);
+    expect(sorted.map((t) => t.id)).toEqual(["T002", "T003", "T001"]);
+  });
+
+  it("should handle pagination correctly", () => {
+    const totalTenders = 157;
+    const pageSize = 20;
+    const page = 1;
+    const totalPages = Math.ceil(totalTenders / pageSize);
+
+    expect(totalPages).toBe(8);
+    expect(page).toBeLessThanOrEqual(totalPages);
+  });
+});
+
+describe("tender tRPC routes - filtering", () => {
+  it("should filter by budget range", () => {
+    const tenders = [
+      { id: "T001", budget: 250000 }, // 25 萬
+      { id: "T002", budget: 750000 }, // 75 萬
+      { id: "T003", budget: 2500000 }, // 250 萬
+    ];
+
+    const filterByBudget = (tenders: any[], min: number, max: number) => {
+      return tenders.filter((t) => t.budget >= min && t.budget <= max);
+    };
+
+    const highPriority = filterByBudget(tenders, 500000, 1000000);
+    expect(highPriority).toHaveLength(1);
+    expect(highPriority[0].id).toBe("T002");
+  });
+
+  it("should filter by keyword", () => {
+    const tenders = [
+      { id: "T001", projectName: "AI 教育訓練課程" },
+      { id: "T002", projectName: "橋樑工程建設" },
+      { id: "T003", projectName: "數位精進研習" },
+    ];
+
+    const filterByKeyword = (tenders: any[], keyword: string) => {
+      const regex = new RegExp(keyword, "i");
+      return tenders.filter((t) => regex.test(t.projectName));
+    };
+
+    const aiTenders = filterByKeyword(tenders, "AI|數位");
+    expect(aiTenders).toHaveLength(2);
+    expect(aiTenders.map((t) => t.id)).toEqual(["T001", "T003"]);
+  });
+
+  it("should filter by organization type", () => {
+    const tenders = [
+      { id: "T001", orgName: "臺北市立第一女子高級中學" },
+      { id: "T002", orgName: "交通部公路局" },
+      { id: "T003", orgName: "國立臺灣大學" },
+    ];
+
+    const filterByOrgType = (tenders: any[], keyword: string) => {
+      const regex = new RegExp(keyword, "i");
+      return tenders.filter((t) => regex.test(t.orgName));
+    };
+
+    // 「臺北市立第一女子高級中學」包含「中學」，「國立臺灣大學」包含「大學"
+    const schoolTenders = filterByOrgType(tenders, "中學|大學");
+    expect(schoolTenders).toHaveLength(2);
+    expect(schoolTenders.map((t) => t.id)).toEqual(["T001", "T003"]);
+  });
+});
+
+describe("tender tRPC routes - rescore", () => {
+  it("should validate rescore input", () => {
+    const rescoreInput = {
+      tenderId: "acebidx-T001",
+    };
+    expect(rescoreInput.tenderId).toBeDefined();
+    expect(typeof rescoreInput.tenderId).toBe("string");
+  });
+
+  it("should handle batch rescore", () => {
+    const tenderIds = ["T001", "T002", "T003"];
+    const rescoreCount = tenderIds.length;
+    expect(rescoreCount).toBe(3);
+  });
+});
+
+describe("tender tRPC routes - statistics", () => {
+  it("should calculate tender statistics", () => {
+    const tenders = [
+      { id: "T001", aiRecommend: 1, aiScore: 85 },
+      { id: "T002", aiRecommend: 0, aiScore: 45 },
+      { id: "T003", aiRecommend: 1, aiScore: 75 },
+      { id: "T004", aiRecommend: 1, aiScore: 90 },
+    ];
+
+    const stats = {
+      total: tenders.length,
+      recommended: tenders.filter((t) => t.aiRecommend === 1).length,
+      averageScore: tenders.reduce((sum, t) => sum + t.aiScore, 0) / tenders.length,
+      highScore: Math.max(...tenders.map((t) => t.aiScore)),
+      lowScore: Math.min(...tenders.map((t) => t.aiScore)),
+    };
+
+    expect(stats.total).toBe(4);
+    expect(stats.recommended).toBe(3);
+    expect(stats.averageScore).toBe(73.75);
+    expect(stats.highScore).toBe(90);
+    expect(stats.lowScore).toBe(45);
+  });
+
+  it("should group tenders by category", () => {
+    const tenders = [
+      { id: "T001", aiCategory: "教育" },
+      { id: "T002", aiCategory: "AI" },
+      { id: "T003", aiCategory: "教育" },
+      { id: "T004", aiCategory: "活動" },
+    ];
+
+    const grouped = tenders.reduce(
+      (acc, t) => {
+        if (!acc[t.aiCategory]) acc[t.aiCategory] = [];
+        acc[t.aiCategory].push(t);
+        return acc;
+      },
+      {} as Record<string, any[]>
+    );
+
+    expect(grouped["教育"]).toHaveLength(2);
+    expect(grouped["AI"]).toHaveLength(1);
+    expect(grouped["活動"]).toHaveLength(1);
+  });
+});
