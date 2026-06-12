@@ -111,3 +111,4 @@ temp/
 
 # Manus dev logs
 .manus-logs/
+.project-config.json
