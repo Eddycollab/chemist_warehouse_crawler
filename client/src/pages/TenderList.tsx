@@ -8,7 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
-import { Search, RefreshCw, Brain, CheckCircle, XCircle, ChevronLeft, ChevronRight, ExternalLink } from "lucide-react";
+import { Search, RefreshCw, Brain, CheckCircle, XCircle, ChevronLeft, ChevronRight, ExternalLink, Download } from "lucide-react";
 
 const PRIORITY_COLORS: Record<string, string> = {
   High: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -76,6 +76,21 @@ export default function TenderList() {
     },
   });
 
+  const exportMutation = trpc.tender.exportExcel.useMutation({
+    onSuccess: (result) => {
+      if (result.success) {
+        const link = document.createElement("a");
+        link.href = `data:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;base64,${result.data}`;
+        link.download = result.filename || "export.xlsx";
+        link.click();
+        toast.success(`已匯出 ${result.count} 筆標案`);
+      } else {
+        toast.error(result.message || "匯出失敗");
+      }
+    },
+    onError: () => toast.error("匯出失敗，請稍後再試"),
+  });
+
   const handleSearch = () => {
     setKeyword(inputKeyword);
     setPage(1);
@@ -93,14 +108,29 @@ export default function TenderList() {
             共 {data?.total ?? 0} 筆標案
           </p>
         </div>
-        <Button
-          onClick={() => scoreAllMutation.mutate()}
-          disabled={scoreAllMutation.isPending}
-          className="gap-2"
-        >
-          <Brain className="w-4 h-4" />
-          {scoreAllMutation.isPending ? "評分中..." : "AI 批次評分"}
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => exportMutation.mutate({
+              keyword: keyword || undefined,
+              priority: priority !== "all" ? (priority as "High" | "Medium" | "Low") : undefined,
+              recommend: recommend === "yes" ? true : recommend === "no" ? false : undefined,
+            })}
+            disabled={exportMutation.isPending}
+            variant="outline"
+            className="gap-2"
+          >
+            <Download className="w-4 h-4" />
+            {exportMutation.isPending ? "匯出中..." : "匯出 Excel"}
+          </Button>
+          <Button
+            onClick={() => scoreAllMutation.mutate()}
+            disabled={scoreAllMutation.isPending}
+            className="gap-2"
+          >
+            <Brain className="w-4 h-4" />
+            {scoreAllMutation.isPending ? "評分中..." : "AI 批次評分"}
+          </Button>
+        </div>
       </div>
 
       {/* Filters */}

@@ -1100,6 +1100,91 @@ const tenderRouter = router({
     scoreUnscoredTenders().catch(console.error);
     return { success: true, message: "AI 評分任務已啟動，請稍後刷新" };
   }),
+
+  // Export tenders to Excel
+  exportExcel: publicProcedure
+    .input(z.object({
+      keyword: z.string().optional(),
+      priority: z.enum(["High", "Medium", "Low"]).optional(),
+      recommend: z.boolean().optional(),
+      category: z.string().optional(),
+      minScore: z.number().optional(),
+    }))
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) return { success: false, message: "資料庫連接失敗" };
+
+      const conditions = [];
+      if (input.keyword) {
+        conditions.push(or(
+          like(tenders.projectName, `%${input.keyword}%`),
+          like(tenders.orgName, `%${input.keyword}%`)
+        ));
+      }
+      if (input.priority) conditions.push(eq(tenders.aiPriority, input.priority));
+      if (input.recommend !== undefined) conditions.push(eq(tenders.aiRecommend, input.recommend));
+      if (input.category) conditions.push(eq(tenders.aiCategory, input.category));
+      if (input.minScore !== undefined) conditions.push(gte(tenders.aiScore, input.minScore));
+
+      const query = conditions.length > 0 ? and(...conditions) : undefined;
+      const items = query
+        ? await db.select().from(tenders).where(query).orderBy(desc(tenders.aiScore), desc(tenders.createdAt))
+        : await db.select().from(tenders).orderBy(desc(tenders.aiScore), desc(tenders.createdAt));
+
+      // 使用 exceljs 生成 Excel 檔案
+      const ExcelJS = await import("exceljs");
+      const workbook = new ExcelJS.Workbook();
+      const worksheet = workbook.addWorksheet("標案列表");
+
+      // 設定欄位
+      worksheet.columns = [
+        { header: "標案 ID", key: "id", width: 15 },
+        { header: "標案名稱", key: "projectName", width: 40 },
+        { header: "機關名稱", key: "orgName", width: 20 },
+        { header: "預算", key: "budget", width: 12 },
+        { header: "類別", key: "catName", width: 15 },
+        { header: "發布日期", key: "postDate", width: 12 },
+        { header: "截止日期", key: "submitDeadline", width: 12 },
+        { header: "AI 評分", key: "aiScore", width: 10 },
+        { header: "優先級", key: "aiPriority", width: 10 },
+        { header: "推薦", key: "aiRecommend", width: 8 },
+        { header: "分類", key: "aiCategory", width: 10 },
+        { header: "金額適配", key: "aiBudgetFit", width: 10 },
+      ];
+
+      // 添加資料
+      items.forEach((item: any) => {
+        worksheet.addRow({
+          id: item.id,
+          projectName: item.projectName,
+          orgName: item.orgName,
+          budget: item.budget ? `${(item.budget / 10000).toFixed(1)}萬` : "-",
+          catName: item.catName,
+          postDate: item.postDate,
+          submitDeadline: item.submitDeadline,
+          aiScore: item.aiScore || "-",
+          aiPriority: item.aiPriority || "-",
+          aiRecommend: item.aiRecommend ? "是" : "否",
+          aiCategory: item.aiCategory || "-",
+          aiBudgetFit: item.aiBudgetFit || "-",
+        });
+      });
+
+      // 設定樣式
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FFD3D3D3" } };
+
+      // 生成 Buffer
+      const buffer = await workbook.xlsx.writeBuffer();
+      const base64 = (buffer as unknown as Buffer).toString("base64");
+
+      return {
+        success: true,
+        data: base64,
+        filename: `標案列表_${new Date().toISOString().split("T")[0] ?? "export"}.xlsx`,
+        count: items.length,
+      };
+    }),
 });
 
 // ─── Tender Crawl Router ─────────────────────────────────────────────────────
