@@ -1,8 +1,8 @@
 /**
- * News Crawler - Generic news/blog article crawler using Playwright
+ * News Crawler - Generic news/blog article crawler using Puppeteer
  * Supports any website with configurable CSS selectors
  */
-import { chromium } from "playwright";
+import puppeteer from "puppeteer";
 import {
   getNewsSourceById,
   updateNewsSource,
@@ -41,31 +41,42 @@ async function scrapeNewsPage(
   pageUrl: string,
   source: NewsSource
 ): Promise<{ articles: ScrapeResult[]; nextPageUrl: string | null }> {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    locale: "zh-TW",
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
   });
-  const page = await context.newPage();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  );
+  await page.setViewport({ width: 1920, height: 1080 });
 
   try {
     log(`Scraping page: ${pageUrl}`);
-    // 增加超時時間到 90 秒，支持 JavaScript 渲染較慢的網站（如客家委員會）
-    log(`[DEBUG] Starting page.goto with 90s timeout...`);
-    await page.goto(pageUrl, { waitUntil: "domcontentloaded", timeout: 90000 });
+    // 使用 Puppeteer 的 networkidle2 等待策略，更適合複雜的 JavaScript 渲染
+    log(`[DEBUG] Starting page.goto with networkidle2 strategy...`);
+    await page.goto(pageUrl, { waitUntil: "networkidle2", timeout: 120000 });
     log(`[DEBUG] page.goto completed`);
 
-    // 等待 JavaScript 執行完成（增加到 5 秒）
-    log(`[DEBUG] Waiting 5 seconds for JS to complete...`);
-    await page.waitForTimeout(5000);
+    // 等待 JavaScript 執行完成
+    log(`[DEBUG] Waiting 3 seconds for additional JS execution...`);
+    await new Promise(resolve => setTimeout(resolve, 3000));
     log(`[DEBUG] Wait completed`);
 
     // Wait for article cards to appear
     try {
-      // 增加等待時間到 20 秒
+      // 等待選擇器出現
       log(`[DEBUG] Waiting for selector: ${source.articleSelector}`);
-      await page.waitForSelector(source.articleSelector, { timeout: 20000 });
+      await page.waitForFunction(
+        (selector: string) => document.querySelector(selector) !== null,
+        { timeout: 30000 },
+        source.articleSelector
+      );
       log(`[DEBUG] Selector found`);
     } catch (e) {
       log(`Error: article selector "${source.articleSelector}" not found on ${pageUrl}`);
@@ -73,7 +84,7 @@ async function scrapeNewsPage(
       return { articles: [], nextPageUrl: null };
     }
 
-    // Extract articles
+    // Extract articles using Puppeteer's evaluate
     const articles = await page.evaluate(
       ({
         articleSel,
@@ -89,11 +100,16 @@ async function scrapeNewsPage(
         imageSel: string | null;
       }) => {
         const cards = Array.from(document.querySelectorAll(articleSel));
-        return cards.map((card) => {
+        return cards.slice(0, 50).map((card: Element) => {
           // Title and link
           const titleEl = card.querySelector(titleSel) as HTMLAnchorElement | null;
           const title = titleEl?.textContent?.trim() ?? "";
-          const url = titleEl?.href ?? (card.querySelector("a") as HTMLAnchorElement | null)?.href ?? "";
+          let url = titleEl?.href ?? (card.querySelector("a") as HTMLAnchorElement | null)?.href ?? "";
+          
+          // Convert relative URLs to absolute
+          if (url && !url.startsWith("http")) {
+            url = new URL(url, window.location.href).href;
+          }
 
           // Date
           const dateEl = dateSel ? card.querySelector(dateSel) : null;
@@ -105,7 +121,12 @@ async function scrapeNewsPage(
 
           // Image
           const imgEl = imageSel ? card.querySelector(imageSel) as HTMLImageElement | null : null;
-          const imageUrl = imgEl?.src ?? imgEl?.getAttribute("data-src") ?? undefined;
+          let imageUrl = imgEl?.src ?? imgEl?.getAttribute("data-src") ?? undefined;
+          
+          // Convert relative image URLs to absolute
+          if (imageUrl && !imageUrl.startsWith("http")) {
+            imageUrl = new URL(imageUrl, window.location.href).href;
+          }
 
           return { title, url, publishedAt, excerpt, imageUrl };
         });
@@ -125,18 +146,25 @@ async function scrapeNewsPage(
       try {
         const nextEl = await page.$(source.paginationSelector);
         if (nextEl) {
-          nextPageUrl = await nextEl.getAttribute("href");
+          nextPageUrl = await page.evaluate(
+            (el: Element) => (el as HTMLElement).getAttribute("href"),
+            nextEl
+          );
+          // Convert relative URLs to absolute
+          if (nextPageUrl && !nextPageUrl.startsWith("http")) {
+            nextPageUrl = new URL(nextPageUrl, pageUrl).href;
+          }
         }
       } catch {
         // No next page
       }
     }
 
-    const validArticles = articles.filter((a) => a.title && a.url);
+    const validArticles = articles.filter((a: ScrapeResult) => a.title && a.url);
     log(`Found ${validArticles.length} articles on ${pageUrl}`);
     return { articles: validArticles, nextPageUrl };
   } finally {
-    await context.close();
+    await page.close();
     await browser.close();
   }
 }
@@ -252,17 +280,24 @@ export async function testNewsSelector(params: {
   totalFound: number;
   errorMessage?: string;
 }> {
-  const browser = await chromium.launch({ headless: true });
-  const context = await browser.newContext({
-    userAgent:
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    locale: "zh-TW",
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: [
+      "--no-sandbox",
+      "--disable-setuid-sandbox",
+      "--disable-dev-shm-usage",
+      "--disable-gpu",
+    ],
   });
-  const page = await context.newPage();
+  const page = await browser.newPage();
+  await page.setUserAgent(
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+  );
+  await page.setViewport({ width: 1920, height: 1080 });
 
   try {
     log(`[testSelector] Loading: ${params.url}`);
-    await page.goto(params.url, { waitUntil: "domcontentloaded", timeout: 30000 });
+    await page.goto(params.url, { waitUntil: "networkidle2", timeout: 60000 });
 
     // Wait for article selector
     try {
@@ -277,10 +312,16 @@ export async function testNewsSelector(params: {
     }
 
     const results = await page.evaluate(
-      ({ articleSel, titleSel, dateSel, excerptSel, imageSel }) => {
+      ({ articleSel, titleSel, dateSel, excerptSel, imageSel }: {
+        articleSel: string;
+        titleSel: string;
+        dateSel: string | null;
+        excerptSel: string | null;
+        imageSel: string | null;
+      }) => {
         const cards = Array.from(document.querySelectorAll(articleSel));
         const totalFound = cards.length;
-        const articles = cards.slice(0, 10).map((card) => {
+        const articles = cards.slice(0, 10).map((card: Element) => {
           const titleEl = card.querySelector(titleSel) as HTMLAnchorElement | null;
           const title = titleEl?.textContent?.trim() ?? "";
           const url = titleEl?.href ?? (card.querySelector("a") as HTMLAnchorElement | null)?.href ?? "";
@@ -301,7 +342,7 @@ export async function testNewsSelector(params: {
       }
     );
 
-    const validArticles = results.articles.filter((a) => a.title || a.url);
+    const validArticles = results.articles.filter((a: ScrapeResult) => a.title || a.url);
 
     if (validArticles.length === 0) {
       return {
@@ -329,7 +370,7 @@ export async function testNewsSelector(params: {
       errorMessage: `載入頁面失敗：${msg}`,
     };
   } finally {
-    await context.close();
+    await page.close();
     await browser.close();
   }
 }
